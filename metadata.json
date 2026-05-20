@@ -1,0 +1,8 @@
+{
+  "name": "AGT Region Report Tool",
+  "description": "Extract and generate civilization region reports from Google Sheets with multi-criteria filtering and PDF export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

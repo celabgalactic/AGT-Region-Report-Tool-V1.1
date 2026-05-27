@@ -43,9 +43,12 @@ export default function App() {
     return saved;
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [textScale, setTextScale] = useState<string>(() => {
+    return localStorage.getItem('agt_text_scale') || '1';
+  });
   const [audioEnabled, setAudioEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('agt_audio_enabled');
-    return saved === null ? true : saved === 'true';
+    return saved === 'true'; // Default to false (muted) unless explicitly saved as 'true'
   });
   
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -57,7 +60,7 @@ export default function App() {
     }
 
     // Manual font loading reinforcement with local font
-    const font = new FontFace('Geonms', 'url(/geonms-font.ttf)');
+    const font = new FontFace('Geonms', 'url(/NMSFuturaProBook_Kerned.ttf)');
     font.load().then((loadedFont) => {
       // @ts-ignore
       document.fonts.add(loadedFont);
@@ -118,6 +121,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [matchedRecords, setMatchedRecords] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isExtracting, setIsExtracting] = useState(false);
 
   // Reset to first page when search filters or matches change
   useEffect(() => {
@@ -235,11 +239,15 @@ export default function App() {
   }, [reportType, allRawRows]);
 
   const handleSearch = () => {
-    if (!data.length) {
-      fetchData();
-    } else {
-      findRecord(data, columns);
-    }
+    setIsExtracting(true);
+    setTimeout(() => {
+      setIsExtracting(false);
+      if (!data.length) {
+        fetchData();
+      } else {
+        findRecord(data, columns);
+      }
+    }, 1500);
   };
 
   const findRecord = (sourceData: any[], sourceCols: ColumnConfig[], civTerm?: string, galTerm?: string) => {
@@ -292,64 +300,98 @@ export default function App() {
     if (reportType !== 'Simple') return;
     if (matchedRecords.length === 0) return;
 
-    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for tables
-    const displayId = searchKey || 'Bulk';
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape layout (297mm x 210mm)
+    const galaxyFilterVal = selectedGalaxy || 'All';
+    const civFilterVal = searchKey || 'All';
     
-    doc.setFontSize(22);
-    doc.text(`AGT Traveller Point Report`, 20, 20);
-    
-    doc.setFontSize(10);
-    doc.text(`Extraction Ref: ${displayId}`, 20, 30);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, 35);
-    doc.text(`Result Count: ${matchedRecords.length} Verified Entries`, 20, 40);
+    const formatDateToDDMMMYYYY = (dateObj: Date): string => {
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const m = months[dateObj.getMonth()];
+      const y = dateObj.getFullYear();
+      return `${d}-${m}-${y}`;
+    };
 
-    // Dynamic pre-loading of the AGT logo image to include on page 1
-    const logoUrl = "/AGTIcon.png";
-    try {
-      const getLogoBase64 = (): Promise<string | null> => {
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.crossOrigin = "Anonymous";
-          img.onload = () => {
-            try {
-              const canvas = document.createElement("canvas");
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext("2d");
-              if (ctx) {
-                ctx.drawImage(img, 0, 0);
-                resolve(canvas.toDataURL("image/png"));
-                return;
-              }
-            } catch (e) {
-              console.error("Failed to convert image to base64", e);
+    const formatMilitaryTime = (dateObj: Date): string => {
+      const hours = String(dateObj.getHours()).padStart(2, '0');
+      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+      const seconds = String(dateObj.getSeconds()).padStart(2, '0');
+      return `${hours}:${minutes}:${seconds}`;
+    };
+
+    const now = new Date();
+    const formattedDate = formatDateToDDMMMYYYY(now);
+
+    const getBase64Image = (url: string): Promise<string | null> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0);
+              resolve(canvas.toDataURL("image/png"));
+              return;
             }
-            resolve(null);
-          };
-          img.onerror = () => {
-            resolve(null);
-          };
-          img.src = logoUrl;
-        });
-      };
+          } catch (e) {
+            console.error("Canvas export failed for " + url, e);
+          }
+          resolve(null);
+        };
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
+    };
 
-      const logoBase64 = await getLogoBase64();
-      if (logoBase64) {
-        // Draw the custom AGT logo on page 1, right of the summary introduction text
-        doc.addImage(logoBase64, 'PNG', 110, 22, 18, 18);
-      } else {
-        // Draw elegant placeholder vector emblem with "AGT" text if image fails to load
-        doc.setFillColor(255, 180, 81); // AGT Orange: #FFB451
-        doc.rect(110, 22, 18, 18, "F");
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(9);
-        doc.text("AGT", 115, 32);
-        doc.setTextColor(0, 0, 0); // Restore text color
-      }
-    } catch (logoErr) {
-      console.warn("Could not load or embed the AGT Logo on the PDF:", logoErr);
+    let logoBase64 = await getBase64Image("/AgtOfficialLogo.png");
+    if (!logoBase64) {
+      // Fallback to AGTIcon.png if official logo is missing
+      logoBase64 = await getBase64Image("/AGTIcon.png");
     }
-    
+    const iconBase64 = await getBase64Image("/AGTIcon.png");
+
+    // COVER PAGE SETUP
+    // 20% from the top of the cover page (210mm total height -> 20% works out to exactly 42mm center point)
+    if (logoBase64) {
+      doc.addImage(logoBase64, 'PNG', 130.5, 36, 36, 36);
+    } else {
+      // Elegant design shape placeholder
+      doc.setFillColor(255, 5, 0); // FF0500 
+      doc.rect(130.5, 36, 36, 36, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("AGT", 148.5, 56, { align: "center" });
+    }
+
+    // Title: "AGT Region Report"
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(26);
+    doc.setTextColor(255, 5, 0); // FF0500 Accent
+    doc.text("AGT Region Report", 148.5, 95, { align: "center" });
+
+    // Details block below title
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(14);
+    doc.setTextColor(40, 40, 40);
+    doc.text(`Galaxy Filter: ${galaxyFilterVal}`, 148.5, 115, { align: "center" });
+    doc.text(`Civilization Filter: ${civFilterVal}`, 148.5, 125, { align: "center" });
+    doc.text(`Report Date: ${formattedDate}`, 148.5, 135, { align: "center" });
+
+    // Outer border frame for stylish presentation
+    doc.setDrawColor(255, 5, 0); // FF0500 Accent
+    doc.setLineWidth(1);
+    doc.rect(10, 10, 277, 190);
+    doc.setLineWidth(0.3);
+    doc.rect(12, 12, 273, 186);
+
+    // Records page moves to the next page, which will count as Page 1
+    doc.addPage();
+
     const tableHeaders = columns.filter(col => col.enabled).map(col => col.name);
     const tableData = matchedRecords.map(record => 
       columns.filter(col => col.enabled).map(col => record[col.name] || '-')
@@ -365,24 +407,70 @@ export default function App() {
     tableData.push(totalRow);
 
     autoTable(doc, {
-      startY: 50,
+      startY: 28, // start table below repeating header boundary at Y=22
       head: [tableHeaders],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontSize: 8 },
-      bodyStyles: { fontSize: 8 },
-      footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
-      margin: { top: 50, left: 20, right: 20 },
+      headStyles: { fillColor: [42, 42, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      bodyStyles: { fontSize: 8, textColor: [30, 30, 30] },
+      margin: { top: 30, left: 20, right: 20 },
+      didDrawPage: (data) => {
+        // Draw recurring header on every records page
+        const logoX = 20;
+        const logoY = 10;
+        const logoSize = 10;
+        
+        if (iconBase64) {
+          doc.addImage(iconBase64, 'PNG', logoX, logoY, logoSize, logoSize);
+        } else {
+          doc.setFillColor(255, 5, 0);
+          doc.rect(logoX, logoY, logoSize, logoSize, "F");
+        }
+        
+        doc.setFontSize(10);
+        doc.setFont("Helvetica", "bold");
+        doc.setTextColor(255, 5, 0);
+        doc.text(`AGT Region Report - Galaxy: ${galaxyFilterVal} / Civ: ${civFilterVal}`, logoX + 13, logoY + 6);
+        
+        // Page number to the right side of the header (starts on Page 1)
+        doc.setFontSize(8);
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Page ${data.pageNumber}`, 277, logoY + 6, { align: "right" });
+
+        doc.setDrawColor(255, 5, 0);
+        doc.setLineWidth(0.5);
+        doc.line(logoX, logoY + logoSize + 2, 277, logoY + logoSize + 2);
+        
+        // Dynamic Footer starting on Page 1
+        if (data.pageNumber >= 1) {
+          doc.setFontSize(8);
+          doc.setFont("Helvetica", "normal");
+          doc.setTextColor(150, 150, 150);
+          const footerDateStr = formatDateToDDMMMYYYY(now);
+          const militaryTimeStr = formatMilitaryTime(now);
+          doc.text(`Report Created on: ${footerDateStr} ${militaryTimeStr}`, 20, 203, { align: "left" });
+        }
+      },
       didParseCell: (data) => {
+        // Highlight total row at bottom
         if (data.row.index === tableData.length - 1) {
-          data.cell.styles.fillColor = [220, 220, 220];
+          data.cell.styles.fillColor = [245, 245, 245];
+          data.cell.styles.textColor = [255, 5, 0];
           data.cell.styles.fontStyle = 'bold';
         }
       }
     });
 
-    const filename = displayId.replace(/[^a-z0-9]/gi, '_');
-    doc.save(`agt_full_report_${filename}.pdf`);
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
+
+    doc.save(`AGT_Region_Report_${timestamp}.pdf`);
   };
 
   const downloadFullReportCsv = () => {
@@ -435,6 +523,13 @@ export default function App() {
       onTouchStart={handleManualPlay}
       className="min-h-screen bg-[#0a0a0a] text-agt-orange font-sans selection:bg-agt-orange selection:text-black"
     >
+      <style>{`
+        @media (min-width: 768px) {
+          html {
+            font-size: ${16 * parseFloat(textScale)}px !important;
+          }
+        }
+      `}</style>
       {/* Header */}
       <header className="border-b border-agt-orange/5 bg-black/40 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-20 flex items-center justify-between">
@@ -470,13 +565,16 @@ export default function App() {
             </div>
             <button 
               onClick={() => setShowSettings(!showSettings)}
-              className="p-2 hover:bg-[#FFB451]/5 rounded-lg transition-colors relative group"
+              className="p-2 hover:bg-[#FF0500]/10 rounded-lg transition-colors relative group cursor-pointer"
               title="Settings"
               id="settings-btn"
             >
-              <Settings className={`w-5 h-5 transition-transform duration-300 ${showSettings ? 'text-[#FFB451] rotate-90' : 'text-[#FFB451]/40 group-hover:text-[#FFB451]'}`} />
+              <Settings 
+                className="w-5 h-5 transition-transform duration-700 hover:rotate-360" 
+                style={{ color: '#FF0550' }} 
+              />
               {!sheetUrl && (
-                <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-[#FFB451] rounded-full shadow-[0_0_5px_rgba(255,180,81,0.5)]"></span>
+                <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-[#FF0500] rounded-full shadow-[0_0_5px_rgba(255,5,0,0.5)]"></span>
               )}
             </button>
           </div>
@@ -493,12 +591,12 @@ export default function App() {
               
               {/* Report Format Toggle Switch */}
               <div className="flex justify-center">
-                <div className="inline-flex p-1 bg-[#161616] border border-[#FFB451]/20 rounded-full">
+                <div className="inline-flex p-1 bg-[#161616] border-2 border-[#FF0500] rounded-full">
                   <button
                     onClick={() => setReportType('Simple')}
                     className={`px-5 py-2 text-[10px] uppercase font-black tracking-widest rounded-full transition-all cursor-pointer ${
                       reportType === 'Simple'
-                        ? 'bg-[#FFB451] text-black shadow-lg shadow-[#FFB451]/20'
+                        ? 'bg-[#FF0500] text-white shadow-lg shadow-[#FF0500]/25'
                         : 'text-[#FFB451]/55 hover:text-[#FFB451]'
                     }`}
                   >
@@ -508,7 +606,7 @@ export default function App() {
                     onClick={() => setReportType('Detailed')}
                     className={`px-5 py-2 text-[10px] uppercase font-black tracking-widest rounded-full transition-all cursor-pointer ${
                       reportType === 'Detailed'
-                        ? 'bg-[#FFB451] text-black shadow-lg shadow-[#FFB451]/20'
+                        ? 'bg-[#FF0500] text-white shadow-lg shadow-[#FF0500]/25'
                         : 'text-[#FFB451]/55 hover:text-[#FFB451]'
                     }`}
                   >
@@ -547,7 +645,7 @@ export default function App() {
                       fetchData();
                     }
                   }}
-                  className="block w-full pl-14 pr-12 py-5 bg-[#2a2a2a] border-2 border-[#FFB451] rounded-full text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FFB451] focus:border-[#FFB451] transition-all text-[#FFB451] appearance-none shadow-[0_0_25px_rgba(255,180,81,0.25)] focus:shadow-[0_0_35px_rgba(255,180,81,0.55)]"
+                  className="block w-full pl-14 pr-12 py-5 bg-[#2a2a2a] border-2 border-[#FF0500] rounded-full text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FF0500] focus:border-[#FF0500] transition-all text-[#FFB451] appearance-none shadow-[0_0_25px_rgba(255,5,0,0.25)] focus:shadow-[0_0_35px_rgba(255,5,0,0.55)]"
                   id="civilization-select"
                 >
                   <option value="" disabled className="bg-[#2a2a2a] text-[#FFB451]">-- Choose Civilization --</option>
@@ -577,7 +675,7 @@ export default function App() {
                       findRecord(data, columns, searchKey, val);
                     }
                   }}
-                  className="block w-full pl-14 pr-12 py-5 bg-[#2a2a2a] border-2 border-[#FFB451] rounded-full text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FFB451] focus:border-[#FFB451] transition-all text-[#FFB451] placeholder:text-[#FFB451]/50 shadow-[0_0_25px_rgba(255,180,81,0.25)] focus:shadow-[0_0_35px_rgba(255,180,81,0.55)]"
+                  className="block w-full pl-14 pr-12 py-5 bg-[#2a2a2a] border-2 border-[#FF0500] rounded-full text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FF0500] focus:border-[#FF0500] transition-all text-[#FFB451] placeholder:text-[#FFB451]/50 shadow-[0_0_25px_rgba(255,5,0,0.25)] focus:shadow-[0_0_35px_rgba(255,5,0,0.55)]"
                   id="galaxy-select"
                 />
                 <datalist id="galaxy-options">
@@ -595,15 +693,15 @@ export default function App() {
             <button
               onClick={handleSearch}
               disabled={loading || (!searchKey && selectedGalaxy === 'All')}
-              className="px-20 py-5 bg-transparent border-2 border-[#FFB451] text-[#FFB451] rounded-full font-black text-sm uppercase tracking-[0.2em] hover:bg-[#FFB451]/10 active:scale-[0.96] disabled:opacity-25 disabled:pointer-events-none shadow-[0_4px_15px_rgba(0,0,0,0.3)] hover:shadow-[0_0_20px_rgba(255,180,81,0.4)] transition-all flex items-center gap-2"
+              className="px-20 py-5 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-full font-black text-sm uppercase tracking-[0.2em] hover:bg-[#FF0500]/85 active:scale-[0.96] disabled:opacity-25 disabled:pointer-events-none shadow-[0_4px_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.5)] transition-all flex items-center gap-2 cursor-pointer"
               id="fetch-btn"
             >
               {loading ? (
-                <RefreshCw className="w-5 h-5 animate-spin text-[#FFB451]" />
+                <RefreshCw className="w-5 h-5 animate-spin text-white" />
               ) : (
                 <>
-                  <RefreshCw className="w-5 h-5 text-[#FFB451]" />
-                  <span className="text-[#FFB451]">Extract Reports</span>
+                  <RefreshCw className="w-5 h-5 text-white" />
+                  <span className="text-white">Extract Reports</span>
                 </>
               )}
             </button>
@@ -622,18 +720,38 @@ export default function App() {
 
           <div className="space-y-12">
             
-            {/* Settings Area - Full Width Toggleable */}
-            <AnimatePresence>
-              {showSettings && (
+          {/* Settings Overlay - Pop Up Box on top of the main display */}
+          <AnimatePresence>
+            {showSettings && (
+              <div 
+                className="fixed inset-0 bg-black/85 backdrop-blur-md z-[150] flex items-center justify-center p-4 pointer-events-auto"
+                onClick={() => setShowSettings(false)}
+              >
                 <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden bg-[#161616] border border-[#FFB451]/10 rounded-2xl"
+                  initial={{ scale: 0.9, opacity: 0, y: 15 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 15 }}
+                  transition={{ type: "spring", duration: 0.5 }}
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-2xl w-full p-8 shadow-2xl overflow-y-auto max-h-[90vh]"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-12">
+                  {/* Close button inside modal header */}
+                  <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-6">
+                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
+                      <Settings className="w-5 h-5 text-[#FF0550] animate-spin" style={{ color: '#FF0550' }} />
+                      Control Settings
+                    </h3>
+                    <button 
+                      onClick={() => setShowSettings(false)}
+                      className="px-5 py-2.5 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Data Section */}
-                    <div className="space-y-4">
+                    <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
                       <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                         <Database className="w-3 h-3 text-[#FFB451]" />
                         Source Identity
@@ -641,7 +759,7 @@ export default function App() {
                       <div className="space-y-4">
                         <button 
                           onClick={fetchData}
-                          className="w-full py-4 bg-transparent border border-[#FFB451]/35 text-[#FFB451] rounded-xl text-[10px] uppercase tracking-widest font-bold hover:bg-[#FFB451]/10 transition-colors"
+                          className="w-full py-4 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/85 transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                         >
                           Re-sync Point Log Source
                         </button>
@@ -649,32 +767,52 @@ export default function App() {
                     </div>
 
                     {/* Display Settings Section */}
-                    <div className="space-y-4">
+                    <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
                       <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                         <Sliders className="w-3 h-3 text-[#FFB451]" />
-                        Display Scope
+                        Display Settings
                       </h3>
-                      <div className="space-y-2">
-                        <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">Max Records on screen</span>
-                        <select
-                          value={itemsPerPage}
-                          onChange={(e) => {
-                            setItemsPerPage(Number(e.target.value));
-                            setCurrentPage(1);
-                          }}
-                          className="w-full bg-[#161616] border border-[#FFB451]/30 hover:border-[#FFB451] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FFB451] cursor-pointer transition-colors"
-                        >
-                          <option value={15} className="bg-[#161616] text-[#FFB451]">15 Records</option>
-                          <option value={30} className="bg-[#161616] text-[#FFB451]">30 Records</option>
-                          <option value={50} className="bg-[#161616] text-[#FFB451]">50 Records</option>
-                          <option value={100} className="bg-[#161616] text-[#FFB451]">100 Records</option>
-                        </select>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">Max Records on screen</span>
+                          <select
+                            value={itemsPerPage}
+                            onChange={(e) => {
+                              setItemsPerPage(Number(e.target.value));
+                              setCurrentPage(1);
+                            }}
+                            className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
+                          >
+                            <option value={15} className="bg-[#161616] text-[#FFB451]">15 Records</option>
+                            <option value={30} className="bg-[#161616] text-[#FFB451]">30 Records</option>
+                            <option value={50} className="bg-[#161616] text-[#FFB451]">50 Records</option>
+                            <option value={100} className="bg-[#161616] text-[#FFB451]">100 Records</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">Text Scaling (Desktop Mode)</span>
+                          <select
+                            value={textScale}
+                            onChange={(e) => {
+                              setTextScale(e.target.value);
+                              localStorage.setItem('agt_text_scale', e.target.value);
+                            }}
+                            className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
+                          >
+                            <option value="1" className="bg-[#161616] text-[#FFB451]">1x (Default)</option>
+                            <option value="1.5" className="bg-[#161616] text-[#FFB451]">1.5x</option>
+                            <option value="2" className="bg-[#161616] text-[#FFB451]">2x</option>
+                            <option value="2.5" className="bg-[#161616] text-[#FFB451]">2.5x</option>
+                            <option value="3" className="bg-[#161616] text-[#FFB451]">3x</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
 
                     {/* Audio Section */}
-                    <div className="col-span-1 md:col-span-2 pt-8 border-t border-white/5 space-y-4">
-                      <div className="flex items-center justify-between">
+                    <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
+                      <div className="flex items-center justify-between border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
                         <div className="space-y-1">
                           <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                             <Volume2 className="w-3 h-3 text-[#FFB451]" />
@@ -684,21 +822,20 @@ export default function App() {
                         </div>
                         <button 
                           onClick={() => setAudioEnabled(!audioEnabled)}
-                          className={`flex items-center gap-3 px-6 py-3 rounded-xl border transition-all text-[10px] uppercase tracking-widest font-bold ${
-                            audioEnabled 
-                              ? 'bg-[#FFB451]/10 border-[#FFB451] text-[#FFB451]' 
-                              : 'bg-black/40 border-white/5 text-[#FFB451]/50'
+                          className={`flex items-center gap-3 px-6 py-3 rounded-xl border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 transition-all text-[10px] uppercase tracking-widest font-black cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] ${
+                            audioEnabled ? 'opacity-100' : 'opacity-60'
                           }`}
                         >
-                          {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-[#FFB451]" /> : <VolumeX className="w-3.5 h-3.5 text-[#FFB451]" />}
+                          {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-white" /> : <VolumeX className="w-3.5 h-3.5 text-white" />}
                           {audioEnabled ? 'Active' : 'Muted'}
                         </button>
                       </div>
                     </div>
                   </div>
                 </motion.div>
-              )}
-            </AnimatePresence>
+              </div>
+            )}
+          </AnimatePresence>
 
             {/* Results Section - Full Width for Table */}
             <div className="w-full">
@@ -709,25 +846,25 @@ export default function App() {
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.98 }}
-                    className="glass-card rounded-2xl overflow-hidden"
+                    className="rounded-2xl overflow-hidden border-2 border-[#FF0500] shadow-[0_0_30px_rgba(255,5,0,0.15)] bg-black/40"
                   >
-                    <div className="p-8 border-b border-[#FFB451]/10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="p-8 border-b border-[#FF0500]/20 flex flex-col md:flex-row md:items-center justify-between gap-6">
                       <div className="space-y-1">
                         <h3 className="text-xl font-medium text-[#FFB451] flex items-center gap-3">
                           AGT Galactic Archives Results
-                          <span className="px-2 py-0.5 rounded-full bg-[#FFB451]/5 text-[10px] text-[#FFB451] border border-[#FFB451]/20 font-mono">
+                          <span className="px-2 py-0.5 rounded-full bg-[#FF0500]/10 text-[10px] text-[#FFB451] border border-[#FF0500]/45 font-mono">
                             {matchedRecords.length} FOUND
                           </span>
                         </h3>
                         <p className="text-[10px] text-[#FFB451] uppercase tracking-[0.2em]">Verified Galactic Ledger Matches</p>
                       </div>
-
+ 
                       {/* Download and Export Buttons Preceding the Record List */}
                       <div className="flex flex-wrap items-center gap-3">
                         {reportType === 'Simple' && (
                           <button
                             onClick={downloadFullReportPdf}
-                            className="flex items-center gap-2 px-5 py-3 border-2 border-[#FFB451] bg-transparent text-[#FFB451] hover:bg-[#FFB451]/10 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98]"
+                            className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                           >
                             <FileText className="w-3.5 h-3.5" />
                             <span>Export PDF</span>
@@ -735,55 +872,76 @@ export default function App() {
                         )}
                         <button
                           onClick={downloadFullReportCsv}
-                          className="flex items-center gap-2 px-5 py-3 border-2 border-[#FFB451] bg-transparent text-[#FFB451] hover:bg-[#FFB451]/10 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98]"
+                          className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                         >
                           <Download className="w-3.5 h-3.5" />
                           <span>Export CSV</span>
                         </button>
                       </div>
                     </div>
-
+ 
                     <div className="overflow-x-auto custom-scrollbar">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="bg-[#FFB451]/[0.02] border-b border-[#FFB451]/10">
+                          <tr className="bg-[#FF0500]/[0.05] border-b border-[#FF0500]/25">
                             {columns.filter(col => col.enabled).map((col, idx) => (
-                              <th key={idx} className="py-2 px-4 text-[9px] uppercase tracking-widest font-bold text-[#FFB451] whitespace-nowrap">
+                              <th key={idx} className="py-2 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] whitespace-nowrap">
                                 {col.name}
                               </th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#FFB451]/10">
+                        <tbody className="divide-y divide-[#FF0500]/20">
                           {paginatedRecords.map((record, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-[#FFB451]/[0.02] transition-colors group">
-                              {columns.filter(col => col.enabled).map((col, cIdx) => (
-                                <td key={cIdx} className="py-1 px-4 text-[10.5px] leading-none text-[#FFB451] font-mono whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]">
-                                  {record[col.name] || <span className="text-[#FFB451]/40 italic">-</span>}
-                                </td>
-                              ))}
+                            <tr key={rIdx} className="hover:bg-white/[0.04] transition-colors group">
+                              {columns.filter(col => col.enabled).map((col, cIdx) => {
+                                const val = record[col.name];
+                                const isLinkCol = col.name === 'NMS Wiki Link' || String(col.name).toLowerCase().includes('wiki') || String(col.name).toLowerCase().includes('link');
+                                const isValidUrl = typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'));
+                                
+                                return (
+                                  <td key={cIdx} className="py-1.5 px-4 text-[0.71875rem] leading-none text-[#FFB451] font-mono whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]">
+                                    {isLinkCol && val && (isValidUrl || val.includes('.')) ? (
+                                      <a 
+                                        href={isValidUrl ? val : `https://${val}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        className="text-[#FF0500] hover:underline hover:text-[#FF0500]/80 font-black cursor-pointer"
+                                      >
+                                        {val}
+                                      </a>
+                                    ) : (
+                                      val || <span className="text-[#FFB451]/40 italic">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
                             </tr>
                           ))}
                         </tbody>
-                        <tfoot className="border-t-2 border-[#FFB451]/20 bg-[#FFB451]/[0.03]">
+                        <tfoot className="border-t-2 border-[#FF0500] bg-[#0c0c0c]">
                           <tr>
-                            {columns.filter(col => col.enabled).map((col, idx) => (
-                              <td key={idx} className="py-2 px-4 text-[10px] font-bold text-[#FFB451]">
-                                {col.name === columns[4]?.name ? (
-                                  <span>{totalPoints}</span>
-                                ) : col.name === columns[0]?.name ? (
-                                  <span className="uppercase tracking-widest text-[9px] text-[#FFB451] font-bold">Number of Regions</span>
-                                ) : null}
-                              </td>
-                            ))}
+                            {columns.filter(col => col.enabled).map((col, idx) => {
+                              const isTotalCol = col.name === 'Points' || col.name === columns[4]?.name;
+                              const isFirstCol = idx === 0 || col.name === columns[0]?.name;
+                              return (
+                                <td key={idx} className="py-2 px-4 text-[0.6875rem] font-bold text-[#FFB451]">
+                                  {isTotalCol ? (
+                                    <span>TOTAL: {totalPoints}</span>
+                                  ) : isFirstCol ? (
+                                    <span className="uppercase tracking-widest text-[0.625rem] text-[#FFB451] font-bold">Number of Regions</span>
+                                  ) : null}
+                                </td>
+                              );
+                            })}
                           </tr>
                         </tfoot>
                       </table>
                     </div>
-
+ 
                     {/* Pagination Interface (Exceeds 15 records) */}
                     {totalPages > 1 && (
-                      <div className="py-3 px-8 border-t border-[#FFB451]/10 bg-[#FFB451]/[0.01] flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="py-3 px-8 border-t border-[#FF0500]/20 bg-[#FF0500]/[0.01] flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="text-[10px] font-mono text-[#FFB451] uppercase tracking-wider">
                           Showing Page <span className="text-[#FFB451] font-bold decoration-2">{currentPage}</span> of <span className="text-[#FFB451] font-bold">{totalPages}</span> ({matchedRecords.length} total rows)
                         </div>
@@ -791,18 +949,18 @@ export default function App() {
                           <button 
                             disabled={currentPage === 1}
                             onClick={() => setCurrentPage(1)}
-                            className="px-2.5 py-1.5 rounded-lg border border-[#FFB451]/10 bg-[#FFB451]/5 text-[9px] font-bold uppercase tracking-wider hover:bg-[#FFB451]/10 hover:border-[#FFB451] disabled:opacity-10 disabled:pointer-events-none transition-all text-[#FFB451]"
+                            className="px-2.5 py-1.5 rounded-lg border-2 border-[#FF0500] bg-[#FF0500] text-white text-[9px] font-black uppercase tracking-wider hover:bg-[#FF0500]/85 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.1)]"
                           >
                             First
                           </button>
                           <button 
                             disabled={currentPage === 1}
                             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            className="px-2.5 py-1.5 rounded-lg border border-[#FFB451]/10 bg-[#FFB451]/5 text-[9px] font-bold uppercase tracking-wider hover:bg-[#FFB451]/10 hover:border-[#FFB451] disabled:opacity-10 disabled:pointer-events-none transition-all text-[#FFB451]"
+                            className="px-2.5 py-1.5 rounded-lg border-2 border-[#FF0500] bg-[#FF0500] text-white text-[9px] font-black uppercase tracking-wider hover:bg-[#FF0500]/85 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.1)]"
                           >
                             Prev
                           </button>
-
+ 
                           {Array.from({ length: totalPages }, (_, i) => i + 1).map((pg) => {
                             const isNear = Math.abs(pg - currentPage) <= 1;
                             const isBoundary = pg === 1 || pg === totalPages;
@@ -816,39 +974,39 @@ export default function App() {
                               <button
                                 key={pg}
                                 onClick={() => setCurrentPage(pg)}
-                                className={`w-7 h-7 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                                className={`w-7 h-7 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer ${
                                   currentPage === pg 
-                                    ? 'bg-[#FFB451] text-black shadow-[0_0_8px_rgba(255,180,81,0.35)]' 
-                                    : 'bg-black/30 border border-[#FFB451]/10 text-[#FFB451] hover:text-[#FFB451] hover:bg-[#FFB451]/10'
+                                    ? 'bg-[#FF0500] text-white border-2 border-[#FF0500] shadow-[0_0_12px_rgba(255,5,0,0.45)] font-black' 
+                                    : 'bg-black/30 border-2 border-[#FF0500] text-[#FFB451] hover:bg-[#FF0500]/15'
                                 }`}
                               >
                                 {pg}
                               </button>
                             );
                           })}
-
+ 
                           <button 
                             disabled={currentPage === totalPages}
                             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                            className="px-2.5 py-1.5 rounded-lg border border-[#FFB451]/10 bg-[#FFB451]/5 text-[9px] font-bold uppercase tracking-wider hover:bg-[#FFB451]/10 hover:border-[#FFB451] disabled:opacity-10 disabled:pointer-events-none transition-all text-[#FFB451]"
+                            className="px-2.5 py-1.5 rounded-lg border-2 border-[#FF0500] bg-[#FF0500] text-white text-[9px] font-black uppercase tracking-wider hover:bg-[#FF0500]/85 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.1)]"
                           >
                             Next
                           </button>
                           <button 
                             disabled={currentPage === totalPages}
                             onClick={() => setCurrentPage(totalPages)}
-                            className="px-2.5 py-1.5 rounded-lg border border-[#FFB451]/10 bg-[#FFB451]/5 text-[9px] font-bold uppercase tracking-wider hover:bg-[#FFB451]/10 hover:border-[#FFB451] disabled:opacity-10 disabled:pointer-events-none transition-all text-[#FFB451]"
+                            className="px-2.5 py-1.5 rounded-lg border-2 border-[#FF0500] bg-[#FF0500] text-white text-[9px] font-black uppercase tracking-wider hover:bg-[#FF0500]/85 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.1)]"
                           >
                             Last
                           </button>
                         </div>
                       </div>
                     )}
-
-                    <div className="p-6 border-t border-[#FFB451]/10 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-[#FFB451]/[0.01]">
+ 
+                    <div className="p-6 border-t border-[#FF0500]/20 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-[#FF0500]/[0.01]">
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#FFB451] shadow-[0_0_8px_rgba(255,180,81,0.4)]"></div>
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#FF0500] shadow-[0_0_8px_rgba(255,5,0,0.5)]"></div>
                           <span className="text-[9px] uppercase tracking-widest text-[#FFB451] font-bold">Ledger Integrity: Verified</span>
                         </div>
                         <span className="text-[9px] font-mono text-[#FFB451] uppercase tracking-widest hidden md:inline">
@@ -910,10 +1068,46 @@ export default function App() {
         </div>
       </footer>
 
+      {/* Extract Reports Loading Overlay */}
+      <AnimatePresence>
+        {isExtracting && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] flex flex-col items-center justify-center p-4 pointer-events-auto"
+          >
+            <motion.img
+              src="/AgtOfficialLogo.png"
+              alt="AGT Official Logo"
+              className="w-48 h-48 object-contain"
+              initial={{ rotateY: 0, scale: 0.8 }}
+              animate={{ rotateY: 360 * 3, scale: [0.8, 1.15, 0.8] }}
+              exit={{ rotateY: 360 * 4, scale: 0, opacity: 0 }}
+              transition={{ duration: 1.5, ease: "easeInOut" }}
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                if (img.src !== window.location.origin + "/AGTIcon.png") {
+                  img.src = "/AGTIcon.png";
+                }
+              }}
+            />
+            <motion.p
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+              className="text-[#FF0500] text-sm uppercase tracking-[0.25em] font-extrabold text-center mt-6"
+            >
+              Processing Galactic Archive...
+            </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Background Audio */}
       <audio 
         ref={audioRef}
-        src="/api/asset-proxy?id=1MLd7Vp0whtVXZF-KRxSoH2544q4TA5zD"
+        src="/AGT Anthem (Instrumental).mp3"
         loop
         preload="auto"
       />

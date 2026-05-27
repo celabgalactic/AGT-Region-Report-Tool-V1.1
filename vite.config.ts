@@ -63,10 +63,33 @@ export default defineConfig(({mode}) => {
             }
           };
 
+          const serveAudio = (req: any, res: any) => {
+            try {
+              const audioPath = path.resolve(process.cwd(), 'AGT Anthem (Instrumental).mp3');
+              if (fs.existsSync(audioPath)) {
+                const data = fs.readFileSync(audioPath);
+                res.setHeader('Content-Type', 'audio/mpeg');
+                res.setHeader('Access-Control-Allow-Origin', '*');
+                res.setHeader('Cache-Control', 'public, max-age=31536000');
+                res.end(data);
+                return;
+              }
+              res.statusCode = 404;
+              res.end('Audio file not found at: ' + audioPath);
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end('Error serving audio: ' + err.message);
+            }
+          };
+
           server.middlewares.use('/AGTIcon.png', serveLogo);
           server.middlewares.use('/AGTicon.png', serveLogo);
           server.middlewares.use('/api/AGTIcon.png', serveLogo);
           server.middlewares.use('/api/AGTicon.png', serveLogo);
+          server.middlewares.use('/AGT Anthem (Instrumental).mp3', serveAudio);
+          server.middlewares.use('/AGT%20Anthem%20(Instrumental).mp3', serveAudio);
+          server.middlewares.use('/api/AGT Anthem (Instrumental).mp3', serveAudio);
+          server.middlewares.use('/api/AGT%20Anthem%20(Instrumental).mp3', serveAudio);
 
           server.middlewares.use('/api/asset-proxy', async (req, res, next) => {
             const urlObj = new URL(req.url || '', 'http://localhost');

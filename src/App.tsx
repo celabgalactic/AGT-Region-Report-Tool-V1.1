@@ -761,7 +761,7 @@ export default function App() {
                           onClick={fetchData}
                           className="w-full py-4 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/85 transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                         >
-                          Re-sync Point Log Source
+                          Re-Sync Region Data
                         </button>
                       </div>
                     </div>
@@ -816,9 +816,8 @@ export default function App() {
                         <div className="space-y-1">
                           <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                             <Volume2 className="w-3 h-3 text-[#FFB451]" />
-                            Ambience Module
+                            AGT Anthem
                           </h3>
-                          <p className="text-[10px] text-[#FFB451]/80 uppercase tracking-wider">Atmospheric Background Loop</p>
                         </div>
                         <button 
                           onClick={() => setAudioEnabled(!audioEnabled)}

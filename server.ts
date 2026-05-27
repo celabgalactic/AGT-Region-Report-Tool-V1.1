@@ -84,6 +84,18 @@ async function startServer() {
     res.status(404).send("Logo not found");
   });
 
+  // Route to serve the local background audio loop
+  app.get(["/AGT Anthem (Instrumental).mp3", "/AGT%20Anthem%20(Instrumental).mp3", "/api/AGT Anthem (Instrumental).mp3", "/api/AGT%20Anthem%20(Instrumental).mp3"], (req, res) => {
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+    const fullPath = path.join(process.cwd(), "AGT Anthem (Instrumental).mp3");
+    if (fs.existsSync(fullPath)) {
+      return res.sendFile(fullPath);
+    }
+    res.status(404).send("Audio loop not found");
+  });
+
   // Proxy route for Google Drive assets to bypass CORS
   app.get("/api/asset-proxy", async (req, res) => {
     const fileId = req.query.id as string;

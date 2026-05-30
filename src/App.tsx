@@ -113,6 +113,40 @@ export default function App() {
 
   const [searchKey, setSearchKey] = useState('');
   const [selectedGalaxy, setSelectedGalaxy] = useState('All');
+  const [isGalaxyDropdownOpen, setIsGalaxyDropdownOpen] = useState(false);
+  const [activeGalaxyIndex, setActiveGalaxyIndex] = useState(0);
+  const autocompleteRef = useRef<HTMLDivElement>(null);
+
+  const filteredGalaxies = useMemo(() => {
+    const inputVal = selectedGalaxy.trim().toLowerCase();
+    const options = ['All', ...GALAXIES];
+    if (!inputVal) {
+      return options.slice(0, 50);
+    }
+    const filtered = options.filter(gal => gal.toLowerCase().includes(inputVal));
+    return filtered.sort((a, b) => {
+      const aLower = a.toLowerCase();
+      const bLower = b.toLowerCase();
+      const aStarts = aLower.startsWith(inputVal);
+      const bStarts = bLower.startsWith(inputVal);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return aLower.localeCompare(bLower);
+    }).slice(0, 50);
+  }, [selectedGalaxy]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (autocompleteRef.current && !autocompleteRef.current.contains(e.target as Node)) {
+        setIsGalaxyDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const [reportType, setReportType] = useState<'Simple' | 'Detailed'>('Simple');
   const [allRawRows, setAllRawRows] = useState<string[][]>([]);
   const [data, setData] = useState<any[]>([]);
@@ -660,33 +694,114 @@ export default function App() {
               </div>
 
               {/* Galaxy Dropdown/Search */}
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-[#FFB451] group-focus-within:text-[#FFB451] transition-colors">
+              <div ref={autocompleteRef} className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-[#FFB451] group-focus-within:text-[#FFB451] transition-colors z-10">
                   <Globe className="h-5 w-5" />
                 </div>
                 <input
-                  list="galaxy-options"
+                  type="text"
                   value={selectedGalaxy}
                   placeholder="Type or select galaxy..."
+                  onFocus={() => {
+                    setIsGalaxyDropdownOpen(true);
+                    setActiveGalaxyIndex(0);
+                  }}
                   onChange={(e) => {
                     const val = e.target.value;
                     setSelectedGalaxy(val);
+                    setIsGalaxyDropdownOpen(true);
+                    setActiveGalaxyIndex(0);
                     if (data.length) {
                       findRecord(data, columns, searchKey, val);
                     }
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      if (!isGalaxyDropdownOpen) {
+                        setIsGalaxyDropdownOpen(true);
+                        setActiveGalaxyIndex(0);
+                      } else {
+                        setActiveGalaxyIndex((prev) => (prev + 1) % Math.max(1, filteredGalaxies.length));
+                      }
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      if (isGalaxyDropdownOpen) {
+                        setActiveGalaxyIndex((prev) => (prev - 1 + filteredGalaxies.length) % Math.max(1, filteredGalaxies.length));
+                      }
+                    } else if (e.key === 'Enter') {
+                      if (isGalaxyDropdownOpen && filteredGalaxies.length > 0) {
+                        e.preventDefault();
+                        const selected = filteredGalaxies[activeGalaxyIndex];
+                        if (selected) {
+                          setSelectedGalaxy(selected);
+                          setIsGalaxyDropdownOpen(false);
+                          if (data.length) {
+                            findRecord(data, columns, searchKey, selected);
+                          }
+                        }
+                      }
+                    } else if (e.key === 'Escape') {
+                      setIsGalaxyDropdownOpen(false);
+                    }
+                  }}
                   className="block w-full pl-14 pr-12 py-5 bg-[#2a2a2a] border-2 border-[#FF0500] rounded-full text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FF0500] focus:border-[#FF0500] transition-all text-[#FFB451] placeholder:text-[#FFB451]/50 shadow-[0_0_25px_rgba(255,5,0,0.25)] focus:shadow-[0_0_35px_rgba(255,5,0,0.55)]"
                   id="galaxy-select"
+                  autoComplete="off"
                 />
-                <datalist id="galaxy-options">
-                  <option value="All" />
-                  {GALAXIES.map(gal => (
-                    <option key={gal} value={gal} />
-                  ))}
-                </datalist>
-                <div className="absolute right-4 inset-y-0 flex items-center pointer-events-none text-[#FFB451]">
-                  <ChevronRight className="w-5 h-5 rotate-90" />
-                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsGalaxyDropdownOpen((prev) => !prev);
+                  }}
+                  className="absolute right-4 inset-y-0 flex items-center text-[#FFB451] hover:text-[#FFB451]/80 focus:outline-none z-10"
+                >
+                  <ChevronRight className={`w-5 h-5 transition-transform duration-200 ${isGalaxyDropdownOpen ? '-rotate-90' : 'rotate-90'}`} />
+                </button>
+
+                <AnimatePresence>
+                  {isGalaxyDropdownOpen && filteredGalaxies.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute left-0 right-0 mt-2 max-h-60 overflow-y-auto bg-[#1a1a1a] border-2 border-[#FF0500] rounded-2xl shadow-[0_10px_35px_rgba(255,5,0,0.45)] z-50 overflow-hidden divide-y divide-[#FF0500]/10 slim-scroll"
+                    >
+                      {filteredGalaxies.map((gal, idx) => {
+                        const isActive = idx === activeGalaxyIndex;
+                        return (
+                          <div
+                            key={gal}
+                            onClick={() => {
+                              setSelectedGalaxy(gal);
+                              setIsGalaxyDropdownOpen(false);
+                              if (data.length) {
+                                  findRecord(data, columns, searchKey, gal);
+                              }
+                            }}
+                            onMouseEnter={() => {
+                              setActiveGalaxyIndex(idx);
+                            }}
+                            className={`px-6 py-3 cursor-pointer text-base font-mono transition-all flex items-center justify-between ${
+                              isActive 
+                                ? 'bg-[#FF0500]/20 text-white font-bold border-l-4 border-l-[#FF0500]' 
+                                : 'text-[#FFB451] hover:text-[#FFB451]/80 hover:bg-[#FF0500]/5'
+                            }`}
+                          >
+                            <span>{gal}</span>
+                            {gal === 'All' && (
+                              <span className="text-[10px] uppercase bg-[#FF0500]/20 text-white tracking-widest font-bold px-2 py-0.5 rounded">
+                                Show All
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 

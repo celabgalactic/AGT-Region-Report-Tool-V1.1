@@ -20,12 +20,834 @@ import {
   Volume2,
   VolumeX,
   Globe,
-  Sliders
+  Sliders,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown,
+  RotateCcw
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { CIVILIZATIONS, GALAXIES } from './constants';
+// @ts-ignore
+import regionsIcon from './regions-icon.png';
+
+// Column configuration mapping
+interface ColumnConfig {
+  name: string;
+  enabled: boolean;
+}
+
+interface TranslationDict {
+  [key: string]: {
+    en: string;
+    fr: string;
+    es: string;
+    de: string;
+    pt: string;
+    th: string;
+    hi: string;
+    ja: string;
+    zh: string;
+  };
+}
+
+const TRANSLATIONS: TranslationDict = {
+  // Navigation / Title
+  "Alliance of Galactic Travellers": {
+    en: "Alliance of Galactic Travellers",
+    fr: "Alliance des Voyageurs Galactiques",
+    es: "Alianza de Viajeros Galácticos",
+    de: "Allianz der galaktischen Reisenden",
+    pt: "Aliança de Viajantes Galácticos",
+    th: "พันธมิตรนักเดินทางแห่งกาแล็กซี",
+    hi: "गैलेक्टिक यात्रियों का गठबंधन",
+    ja: "銀河旅行者同盟",
+    zh: "星际旅行者联盟"
+  },
+  "AGT Region Report Tool": {
+    en: "AGT Region Report Tool",
+    fr: "Outil de Rapport de Région AGT",
+    es: "Herramienta de Informe de Región de AGT",
+    de: "AGT-Regionsbericht-Tool",
+    pt: "Ferramenta de Relatório de Região AGT",
+    th: "เครื่องมือรายงานภูมิภาค AGT",
+    hi: "AGT क्षेत्र रिपोर्ट उपकरण",
+    ja: "AGT リージョンレポートツール",
+    zh: "AGT 区域报告工具"
+  },
+  "STATUS:": {
+    en: "STATUS:",
+    fr: "STATUT :",
+    es: "ESTADO:",
+    de: "STATUS:",
+    pt: "STATUS:",
+    th: "สถานะ:",
+    hi: "स्थिति:",
+    ja: "ステータス:",
+    zh: "状态:"
+  },
+  "SYNCING": {
+    en: "SYNCING",
+    fr: "SYNCHRONISATION",
+    es: "SINCRONIZANDO",
+    de: "SYNCHRONISIEREN",
+    pt: "SINCRONIZANDO",
+    th: "กำลังซิงค์",
+    hi: "सिंक हो रहा है",
+    ja: "同期中",
+    zh: "同步中"
+  },
+  "CONNECTED": {
+    en: "CONNECTED",
+    fr: "CONNECTÉ",
+    es: "CONECTADO",
+    de: "VERBUNDEN",
+    pt: "CONECTADO",
+    th: "เชื่อมต่อแล้ว",
+    hi: "जुड़ा हुआ",
+    ja: "接続済み",
+    zh: "已连接"
+  },
+  "DISCONNECTED": {
+    en: "DISCONNECTED",
+    fr: "DÉCONNECTÉ",
+    es: "DESCONECTADO",
+    de: "GETRENNT",
+    pt: "DESCONECTADO",
+    th: "ตัดการเชื่อมต่อ",
+    hi: "डिस्कनेक्ट किया गया",
+    ja: "切断済み",
+    zh: "已断开"
+  },
+  "Control Settings": {
+    en: "Control Settings",
+    fr: "Paramètres de Contrôle",
+    es: "Ajustes de Control",
+    de: "Steuerungseinstellungen",
+    pt: "Configurações de Controle",
+    th: "การตั้งค่าควบคุม",
+    hi: "नियंत्रण सेटिंग्स",
+    ja: "コントロール設定",
+    zh: "控制设置"
+  },
+  "Close": {
+    en: "Close",
+    fr: "Fermer",
+    es: "Cerrar",
+    de: "Schließen",
+    pt: "Fechar",
+    th: "ปิด",
+    hi: "बंद करें",
+    ja: "閉じる",
+    zh: "关闭"
+  },
+  "Display Settings": {
+    en: "Display Settings",
+    fr: "Paramètres d'Affichage",
+    es: "Ajustes de Pantalla",
+    de: "Anzeigeeinstellungen",
+    pt: "Configurações de Exibição",
+    th: "การตั้งค่าการแสดงผล",
+    hi: "प्रदर्शन सेटिंग्स",
+    ja: "表示設定",
+    zh: "显示设置"
+  },
+  "Max Records on screen": {
+    en: "Max Records on screen",
+    fr: "Enregistrements max à l'écran",
+    es: "Registros máx. en pantalla",
+    de: "Maximale Datensätze auf dem Bildschirm",
+    pt: "Registros máx. na tela",
+    th: "ระเบียนสูงสุดบนหน้าจอ",
+    hi: "स्क्रीन पर अधिकतम रिकॉर्ड",
+    ja: "画面上の最大レコード数",
+    zh: "屏幕最大记录数"
+  },
+  "Text Scaling (Desktop Mode)": {
+    en: "Text Scaling (Desktop Mode)",
+    fr: "Échelle du texte (Mode Bureau)",
+    es: "Escala de texto (Modo Escritorio)",
+    de: "Textskalierung (Desktop-Modus)",
+    pt: "Escalonamento de Texto (Modo Desktop)",
+    th: "การปรับขนาดข้อความ (โหมดเดสก์ท็อป)",
+    hi: "टेक्स्ट स्केलिंग (डेस्कटॉप मोड)",
+    ja: "テキストの拡大縮小 (デスクトップモード)",
+    zh: "文本缩放 (桌面模式)"
+  },
+  "1x (Default)": {
+    en: "1x (Default)",
+    fr: "1x (Par défaut)",
+    es: "1x (Predeterminado)",
+    de: "1x (Standard)",
+    pt: "1x (Padrão)",
+    th: "1 เท่า (เริ่มต้น)",
+    hi: "1x (डिफ़ॉल्ट)",
+    ja: "1倍 (デフォルト)",
+    zh: "1x (默认)"
+  },
+  "1.5x": {
+    en: "1.5x",
+    fr: "1.5x",
+    es: "1.5x",
+    de: "1.5x",
+    pt: "1.5x",
+    th: "1.5 เท่า",
+    hi: "1.5x",
+    ja: "1.5倍",
+    zh: "1.5x"
+  },
+  "2x": {
+    en: "2x",
+    fr: "2x",
+    es: "2x",
+    de: "2x",
+    pt: "2x",
+    th: "2 เท่า",
+    hi: "2x",
+    ja: "2倍",
+    zh: "2x"
+  },
+  "2.5x": {
+    en: "2.5x",
+    fr: "2.5x",
+    es: "2.5x",
+    de: "2.5x",
+    pt: "2.5x",
+    th: "2.5 เท่า",
+    hi: "2.5x",
+    ja: "2.5倍",
+    zh: "2.5x"
+  },
+  "3x": {
+    en: "3x",
+    fr: "3x",
+    es: "3x",
+    de: "3x",
+    pt: "3x",
+    th: "3 เท่า",
+    hi: "3x",
+    ja: "3倍",
+    zh: "3x"
+  },
+  "AGT Anthem": {
+    en: "AGT Anthem",
+    fr: "Hymne de l'AGT",
+    es: "Himno de AGT",
+    de: "AGT-Hymne",
+    pt: "Hino da AGT",
+    th: "เพลงสรรเสริญ AGT",
+    hi: "AGT गान",
+    ja: "AGT 賛歌",
+    zh: "AGT 颂歌"
+  },
+  "Active": {
+    en: "Active",
+    fr: "Actif",
+    es: "Activo",
+    de: "Aktiv",
+    pt: "Ativo",
+    th: "ทำงานอยู่",
+    hi: "सक्रिय",
+    ja: "有効",
+    zh: "启用"
+  },
+  "Muted": {
+    en: "Muted",
+    fr: "Muet",
+    es: "Silenciado",
+    de: "Stumm",
+    pt: "Mudo",
+    th: "ปิดเสียง",
+    hi: "म्यूट",
+    ja: "静音",
+    zh: "静音"
+  },
+  "Region DB Source": {
+    en: "Region DB Source",
+    fr: "Source de la DB de Région",
+    es: "Origen de la BD de Regiones",
+    de: "Regions-Datenbankquelle",
+    pt: "Origem do BD da Região",
+    th: "แหล่งฐานข้อมูลภูมิภาค",
+    hi: "क्षेत्र DB स्रोत",
+    ja: "リージョンDBソース",
+    zh: "区域数据库源"
+  },
+  "Re-Sync Region Data": {
+    en: "Re-Sync Region Data",
+    fr: "Re-synchroniser les données",
+    es: "Resincronizar Datos de Región",
+    de: "Regionsdaten neu synchronisieren",
+    pt: "Re-sincronizar Dados de Região",
+    th: "ซิงค์ข้อมูลภูมิภาคใหม่",
+    hi: "क्षेत्र डेटा को फिर से सिंक करें",
+    ja: "リージョンデータを再同期",
+    zh: "重新同步区域数据"
+  },
+  "Simple Report": {
+    en: "Simple Report",
+    fr: "Rapport Simple",
+    es: "Informe Simple",
+    de: "Einfacher Bericht",
+    pt: "Relatório Simples",
+    th: "รายงานแบบง่าย",
+    hi: "सरल रिपोर्ट",
+    ja: "簡易レポート",
+    zh: "简单报告"
+  },
+  "Detailed Report": {
+    en: "Detailed Report",
+    fr: "Rapport Détaillé",
+    es: "Informe Detallado",
+    de: "Detaillierter Bericht",
+    pt: "Relatório Detalhado",
+    th: "รายงานโดยละเอียด",
+    hi: "विस्तृत रिपोर्ट",
+    ja: "詳細レポート",
+    zh: "详细报告"
+  },
+  "Criteria 1": {
+    en: "Criteria 1",
+    fr: "Critère 1",
+    es: "Criterio 1",
+    de: "Kriterium 1",
+    pt: "Critério 1",
+    th: "เกณฑ์ที่ 1",
+    hi: "मानदंड 1",
+    ja: "基準 1",
+    zh: "标准 1"
+  },
+  "Select Civilization": {
+    en: "Select Civilization",
+    fr: "Sélectionner la Civilisation",
+    es: "Seleccionar Civilización",
+    de: "Zivilisation auswählen",
+    pt: "Selecionar Civilização",
+    th: "เลือกอารยธรรม",
+    hi: "सभ्यता चुनें",
+    ja: "文明を選択",
+    zh: "选择文明"
+  },
+  "Criteria 2": {
+    en: "Criteria 2",
+    fr: "Critère 2",
+    es: "Criterio 2",
+    de: "Kriterium 2",
+    pt: "Critério 2",
+    th: "เกณฑ์ที่ 2",
+    hi: "मानदंड 2",
+    ja: "基準 2",
+    zh: "标准 2"
+  },
+  "Preferred Galaxy": {
+    en: "Preferred Galaxy",
+    fr: "Galaxie Préférée",
+    es: "Galaxia Preferida",
+    de: "Bevorzugte Galaxie",
+    pt: "Galáxia Preferida",
+    th: "กาแล็กซีที่ต้องการ",
+    hi: "पसंदीदा आकाशगंगा",
+    ja: "好みの銀河",
+    zh: "首选星系"
+  },
+  "Type or select civilization...": {
+    en: "Type or select civilization...",
+    fr: "Saisir ou choisir la civilisation...",
+    es: "Escribe o elige civilización...",
+    de: "Zivilisation eingeben oder auswählen...",
+    pt: "Digite ou selecione a civilização...",
+    th: "พิมพ์หรือเลือกอารยธรรม...",
+    hi: "सभ्यता टाइप करें या चुनें...",
+    ja: "文明を入力または選択...",
+    zh: "输入或选择文明..."
+  },
+  "Type or select galaxy...": {
+    en: "Type or select galaxy...",
+    fr: "Saisir ou choisir la galaxie...",
+    es: "Escribe o elige galaxia...",
+    de: "Galaxie eingeben oder auswählen...",
+    pt: "Digite ou selecione a galáxia...",
+    th: "พิมพ์หรือเลือกกาแล็กซี...",
+    hi: "आकाशगंगा टाइप करें या चुनें...",
+    ja: "銀河を入力または選択...",
+    zh: "输入或选择星系..."
+  },
+  "Extract Reports": {
+    en: "Extract Reports",
+    fr: "Extraire les Rapports",
+    es: "Extraer Informes",
+    de: "Berichte extrahieren",
+    pt: "Extrair Relatórios",
+    th: "ดึงรายงาน",
+    hi: "रिपोर्ट निकालें",
+    ja: "レポートを抽出",
+    zh: "提取报告"
+  },
+  "Processing Galactic Archive...": {
+    en: "Processing Galactic Archive...",
+    fr: "Traitement de l'Archive Galactique...",
+    es: "Procesando Archivo Galáctico...",
+    de: "Galaktisches Archiv wird verarbeitet...",
+    pt: "Processando Arquivo Galáctico...",
+    th: "กำลังประมวลผลคลังข้อมูลกาแล็กซี...",
+    hi: "गैलेक्टिक आर्काइव को संसाधित किया जा रहा है...",
+    ja: "銀河アーカイブを処理中...",
+    zh: "正在处理星际档案..."
+  },
+  "Terminal Ready": {
+    en: "Terminal Ready",
+    fr: "Terminal Prêt",
+    es: "Terminal Listo",
+    de: "Terminal bereit",
+    pt: "Terminal Pronto",
+    th: "เทอร์มินัลพร้อม",
+    hi: "टर्मिनल तैयार",
+    ja: "端末準備完了",
+    zh: "终端就绪"
+  },
+  "Report Generation Sequence Pending Civilization Selection": {
+    en: "Report Generation Sequence Pending Civilization Selection",
+    fr: "Génération de rapport en attente de la sélection de la civilisation",
+    es: "Secuencia de Generación de Informe Pendiente de Selección de Civilización",
+    de: "Berichtsgenerierungssequenz wartet auf Zivilisationsauswahl",
+    pt: "Sequência de Geração de Relatório Pendente de Seleção de Civilização",
+    th: "ลำดับการสร้างรายงานอยู่ระหว่างรอการเลือกอารยธรรม",
+    hi: "सभ्यता चयन की प्रतीक्षा में रिपोर्ट पीढ़ी अनुक्रम लंबित है",
+    ja: "文明の選択待ちのためレポート生成シーケンスは保留中",
+    zh: "报告生成序列正等待文明选择"
+  },
+  "AGT Galactic Archives Results": {
+    en: "AGT Galactic Archives Results",
+    fr: "Résultats des Archives Galactiques AGT",
+    es: "Resultados de Archivos Galácticos de AGT",
+    de: "Ergebnisse der galaktischen Archive der AGT",
+    pt: "Resultados dos Arquivos Galácticos da AGT",
+    th: "ผลลัพธ์คลังข้อมูลกาแล็กซี AGT",
+    hi: "AGT गैलेक्टिक आर्काइव परिणाम",
+    ja: "AGT 銀河アーカイブ結果",
+    zh: "AGT 星际档案结果"
+  },
+  "FOUND": {
+    en: "FOUND",
+    fr: "TROUVÉS",
+    es: "ENCONTRADOS",
+    de: "GEFUNDEN",
+    pt: "ENCONTRADOS",
+    th: "พบ",
+    hi: "मिला",
+    ja: "検出",
+    zh: "找到"
+  },
+  "Verified Galactic Ledger Matches": {
+    en: "Verified Galactic Ledger Matches",
+    fr: "Correspondances du Grand Livre Galactique Vérifiées",
+    es: "Coincidencias de Registro Galáctico Verificadas",
+    de: "Verifizierte galaktische Hauptbuch-Übereinstimmungen",
+    pt: "Correspondências de Livro Razão Galáctico Verificadas",
+    th: "ตรวจสอบรายการที่ตรงกันของบัญชีแยกประเภทกาแล็กซีแล้ว",
+    hi: "सत्यापित गैलेक्टिक लेजर मिलान",
+    ja: "検証された銀河台帳の一致",
+    zh: "已验证的星际账本匹配项"
+  },
+  "Export PDF": {
+    en: "Export PDF",
+    fr: "Exporter en PDF",
+    es: "Exportar PDF",
+    de: "PDF exportieren",
+    pt: "Exportar PDF",
+    th: "ส่งออก PDF",
+    hi: "पीडीएफ निर्यात करें",
+    ja: "PDF出力",
+    zh: "导出 PDF"
+  },
+  "Export CSV": {
+    en: "Export CSV",
+    fr: "Exporter en CSV",
+    es: "Exportar CSV",
+    de: "CSV exportieren",
+    pt: "Exportar CSV",
+    th: "ส่งออก CSV",
+    hi: "सीएसवी निर्यात करें",
+    ja: "CSV出力",
+    zh: "导出 CSV"
+  },
+  "TOTAL:": {
+    en: "TOTAL:",
+    fr: "TOTAL :",
+    es: "TOTAL:",
+    de: "GESAMT:",
+    pt: "TOTAL:",
+    th: "รวมทั้งหมด:",
+    hi: "कुल:",
+    ja: "合計:",
+    zh: "总计:"
+  },
+  "Number of Regions": {
+    en: "Number of Regions",
+    fr: "Nombre de Régions",
+    es: "Número de Regiones",
+    de: "Anzahl der Regionen",
+    pt: "Número de Regiões",
+    th: "จำนวนภูมิภาค",
+    hi: "क्षेत्रों की संख्या",
+    ja: "リージョン数",
+    zh: "区域数量"
+  },
+  "Showing Page": {
+    en: "Showing Page",
+    fr: "Affichage de la page",
+    es: "Mostrando Página",
+    de: "Zeige Seite",
+    pt: "Mostrando Página",
+    th: "แสดงหน้า",
+    hi: "पृष्ठ दिखा रहा है",
+    ja: "ページ表示",
+    zh: "显示第"
+  },
+  "of": {
+    en: "of",
+    fr: "sur",
+    es: "de",
+    de: "von",
+    pt: "de",
+    th: "จาก",
+    hi: "का",
+    ja: " / ",
+    zh: "页，共"
+  },
+  "total rows": {
+    en: "total rows",
+    fr: "lignes au total",
+    es: "filas totales",
+    de: "Zeilen insgesamt",
+    pt: "linhas no total",
+    th: "แถวทั้งหมด",
+    hi: "कुल पंक्तियाँ",
+    ja: "総行数",
+    zh: "行记录"
+  },
+  "First": {
+    en: "First",
+    fr: "Premier",
+    es: "Primero",
+    de: "Erste",
+    pt: "Primeiro",
+    th: "หน้าแรก",
+    hi: "पहला",
+    ja: "最初",
+    zh: "第一页"
+  },
+  "Prev": {
+    en: "Prev",
+    fr: "Préc",
+    es: "Ant",
+    de: "Zurück",
+    pt: "Anterior",
+    th: "ก่อนหน้า",
+    hi: "पिछला",
+    ja: "前へ",
+    zh: "上一页"
+  },
+  "Next": {
+    en: "Next",
+    fr: "Suiv",
+    es: "Sig",
+    de: "Weiter",
+    pt: "Próximo",
+    th: "ถัดไป",
+    hi: "अगला",
+    ja: "次へ",
+    zh: "下一页"
+  },
+  "Last": {
+    en: "Last",
+    fr: "Dernier",
+    es: "Último",
+    de: "Letzte",
+    pt: "Último",
+    th: "หน้าสุดท้าย",
+    hi: "अंतिम",
+    ja: "最後",
+    zh: "最后一页"
+  },
+  "Ledger Integrity: Verified": {
+    en: "Ledger Integrity: Verified",
+    fr: "Intégrité du Grand Livre : Vérifiée",
+    es: "Integridad de Registro: Verificada",
+    de: "Hauptbuchintegrität: Verifiziert",
+    pt: "Integridade do Livro Razão: Verificada",
+    th: "ความสมบูรณ์ของบัญชีแยกประเภท: ตรวจสอบแล้ว",
+    hi: "लेजर अखंडता: सत्यापित",
+    ja: "台帳データ整合性: 検証済み",
+    zh: "账本完整性：已验证"
+  },
+  "Index Reference:": {
+    en: "Index Reference:",
+    fr: "Référence d'Index :",
+    es: "Referencia de Índice:",
+    de: "Indexreferenz:",
+    pt: "Referência de Índice:",
+    th: "การอ้างอิงดัชนี:",
+    hi: "अनुक्रमणिका संदर्भ:",
+    ja: "インデックス参照:",
+    zh: "索引主键："
+  },
+  "AGT SECURE ARCHIVE CLIENT": {
+    en: "AGT SECURE ARCHIVE CLIENT",
+    fr: "CLIENT D'ARCHIVES SÉCURISÉES AGT",
+    es: "CLIENTE DE ARCHIVO SEGURO DE AGT",
+    de: "AGT SICHERER ARCHIV-CLIENT",
+    pt: "CLIENTE DE ARQUIVO SEGURO DA AGT",
+    th: "ไคลเอนต์จัดเก็บข้อมูลที่ปลอดภัยของ AGT",
+    hi: "AGT सुरक्षित आर्काइव क्लाइंट",
+    ja: "AGT セキュアアーカイブクライアント",
+    zh: "AGT 安全档案客户端"
+  },
+  "Select Language": {
+    en: "Select Language",
+    fr: "Choisir la Langue",
+    es: "Seleccionar Idioma",
+    de: "Sprache auswählen",
+    pt: "Selecionar Idioma",
+    th: "เลือกภาษา",
+    hi: "भाषा चुनें",
+    ja: "言語を選択",
+    zh: "选择语言"
+  },
+  "Show All": {
+    en: "Show All",
+    fr: "Tout Afficher",
+    es: "Mostrar Todo",
+    de: "Alle anzeigen",
+    pt: "Mostrar Tudo",
+    th: "แสดงทั้งหมด",
+    hi: "सभी दिखाएं",
+    ja: "すべて表示",
+    zh: "显示全部"
+  },
+  "Region Name": {
+    en: "Region Name",
+    fr: "Nom de la Région",
+    es: "Nombre de la Región",
+    de: "Regionsname",
+    pt: "Nome da Região",
+    th: "ชื่อภูมิภาค",
+    hi: "क्षेत्र का नाम",
+    ja: "リージョン名",
+    zh: "区域名称"
+  },
+  "Galaxy": {
+    en: "Galaxy",
+    fr: "Galaxie",
+    es: "Galaxia",
+    de: "Galaxie",
+    pt: "Galáxia",
+    th: "กาแล็กซี",
+    hi: "आकाशगंगा",
+    ja: "銀河",
+    zh: "星系"
+  },
+  "Civilization": {
+    en: "Civilization",
+    fr: "Civilisation",
+    es: "Civilización",
+    de: "Zivilisation",
+    pt: "Civilização",
+    th: "อารยธรรม",
+    hi: "สभ्यता",
+    ja: "文明",
+    zh: "文明"
+  },
+  "Platform": {
+    en: "Platform",
+    fr: "Plateforme",
+    es: "Plataforma",
+    de: "Plattform",
+    pt: "Plataforma",
+    th: "แพลตฟอร์ม",
+    hi: "प्लेटफ़ॉर्म",
+    ja: "プラットフォーム",
+    zh: "平台"
+  },
+  "Points": {
+    en: "Points",
+    fr: "Points",
+    es: "Puntos",
+    de: "Punkte",
+    pt: "Pontos",
+    th: "คะแนน",
+    hi: "अंक",
+    ja: "ポイント",
+    zh: "积分"
+  },
+  "NMS Wiki Link": {
+    en: "NMS Wiki Link",
+    fr: "Lien Wiki NMS",
+    es: "Enlace de Wiki de NMS",
+    de: "NMS-Wiki-Link",
+    pt: "Link da Wiki do NMS",
+    th: "ลิงก์ NMS Wiki",
+    hi: "NMS विकी लिंक",
+    ja: "NMS Wikiリンク",
+    zh: "NMS百科链接"
+  },
+  "15 Records": {
+    en: "15 Records",
+    fr: "15 Enregistrements",
+    es: "15 Registros",
+    de: "15 Datensätze",
+    pt: "15 Registros",
+    th: "15 ระเบียน",
+    hi: "15 रिकॉर्ड",
+    ja: "15レコード",
+    zh: "15 条记录"
+  },
+  "30 Records": {
+    en: "30 Records",
+    fr: "30 Enregistrements",
+    es: "30 Registros",
+    de: "30 Datensätze",
+    pt: "30 Registros",
+    th: "30 ระเบียน",
+    hi: "30 रिकॉर्ड",
+    ja: "30レコード",
+    zh: "30 条记录"
+  },
+  "50 Records": {
+    en: "50 Records",
+    fr: "50 Enregistrements",
+    es: "50 Registros",
+    de: "50 Datensätze",
+    pt: "50 Registros",
+    th: "50 ระเบียน",
+    hi: "50 रिकॉर्ड",
+    ja: "50レコード",
+    zh: "50 条记录"
+  },
+  "100 Records": {
+    en: "100 Records",
+    fr: "100 Enregistrements",
+    es: "100 Registros",
+    de: "100 Datensätze",
+    pt: "100 Registros",
+    th: "100 ระเบียน",
+    hi: "100 रिकॉर्ड",
+    ja: "100レコード",
+    zh: "100 条记录"
+  },
+  "Home": {
+    en: "Home",
+    fr: "Accueil",
+    es: "Inicio",
+    de: "Startseite",
+    pt: "Início",
+    th: "หน้าแรก",
+    hi: "पहला",
+    ja: "最初",
+    zh: "首页"
+  },
+  "About": {
+    en: "About",
+    fr: "À propos",
+    es: "Acerca de",
+    de: "Über uns",
+    pt: "Sobre",
+    th: "เกี่ยวกับ",
+    hi: "के बारे में",
+    ja: "概要",
+    zh: "关于"
+  },
+  "Team": {
+    en: "Team",
+    fr: "Équipe",
+    es: "Equipo",
+    de: "Team",
+    pt: "Equipe",
+    th: "ทีมงาน",
+    hi: "टीम",
+    ja: "チーム",
+    zh: "团队"
+  },
+  "Contribute": {
+    en: "Contribute",
+    fr: "Contribuer",
+    es: "Contribuir",
+    de: "Beitragen",
+    pt: "Contribuir",
+    th: "สนับสนุน",
+    hi: "योगदान दें",
+    ja: "貢献",
+    zh: "贡献"
+  },
+  "Galactic Archives": {
+    en: "Galactic Archives",
+    fr: "Archives Galactiques",
+    es: "Archivos Galácticos",
+    de: "Galaktische Archive",
+    pt: "Arquivos Galácticos",
+    th: "คลังข้อมูลกาแล็กซี",
+    hi: "गैलेक्टिक आर्कायव्स",
+    ja: "銀河アーカイブ",
+    zh: "星系档案"
+  },
+  "Engage": {
+    en: "Engage",
+    fr: "S'engager",
+    es: "Participar",
+    de: "Beteiligen",
+    pt: "Engajar",
+    th: "เข้าร่วม",
+    hi: "जुड़ें",
+    ja: "参加",
+    zh: "参与"
+  },
+  "Support": {
+    en: "Support",
+    fr: "Support",
+    es: "Soporte",
+    de: "Support",
+    pt: "Suporte",
+    th: "ช่วยเหลือ",
+    hi: "समर्थन",
+    ja: "サポート",
+    zh: "支持"
+  },
+  "Terms": {
+    en: "Terms",
+    fr: "Conditions",
+    es: "Términos",
+    de: "Bedingungen",
+    pt: "Termos",
+    th: "ข้อตกลง",
+    hi: "शर्तें",
+    ja: "利用規約",
+    zh: "条款"
+  },
+  "Copyright": {
+    en: "Copyright",
+    fr: "Droit d'auteur",
+    es: "Derechos de autor",
+    de: "Copyright",
+    pt: "Copyright",
+    th: "ลิขสิทธิ์",
+    hi: "कॉपीराइट",
+    ja: "著作権",
+    zh: "版权"
+  },
+  "Reset Fields": {
+    en: "Reset Fields",
+    fr: "Réinitialiser",
+    es: "Restablecer Campos",
+    de: "Felder zurücksetzen",
+    pt: "Redefinir Campos",
+    th: "ล้างข้อมูล",
+    hi: "क्षेत्र रीसेट करें",
+    ja: "フィールドをリセット",
+    zh: "重置表单"
+  }
+};
 
 // Column configuration mapping
 interface ColumnConfig {
@@ -111,11 +933,54 @@ export default function App() {
     }
   };
 
+  const [language, setLanguage] = useState<'en' | 'fr' | 'es' | 'de' | 'pt' | 'th' | 'zh' | 'hi' | 'ja'>(() => {
+    let saved = localStorage.getItem('agt_language') as any;
+    if (saved === 'ru') saved = 'th';
+    return saved || 'en';
+  });
+
+  const t = (key: string): string => {
+    const normalizedKey = key.trim();
+    const entry = TRANSLATIONS[normalizedKey];
+    if (entry && entry[language]) {
+      return entry[language];
+    }
+    // Try case-insensitive lookup
+    for (const k of Object.keys(TRANSLATIONS)) {
+      if (k.toLowerCase() === normalizedKey.toLowerCase()) {
+        return TRANSLATIONS[k][language];
+      }
+    }
+    return key;
+  };
+
   const [searchKey, setSearchKey] = useState('');
+  const [isCivDropdownOpen, setIsCivDropdownOpen] = useState(false);
+  const [activeCivIndex, setActiveCivIndex] = useState(0);
+  const civAutocompleteRef = useRef<HTMLDivElement>(null);
+
   const [selectedGalaxy, setSelectedGalaxy] = useState('All');
   const [isGalaxyDropdownOpen, setIsGalaxyDropdownOpen] = useState(false);
   const [activeGalaxyIndex, setActiveGalaxyIndex] = useState(0);
   const autocompleteRef = useRef<HTMLDivElement>(null);
+
+  const filteredCivilizations = useMemo(() => {
+    const inputVal = searchKey.trim().toLowerCase();
+    const options = ['All', ...CIVILIZATIONS];
+    if (!inputVal) {
+      return options.slice(0, 50);
+    }
+    const filtered = options.filter(civ => civ.toLowerCase().includes(inputVal));
+    return filtered.sort((a, b) => {
+      const aLower = a.toLowerCase();
+      const bLower = b.toLowerCase();
+      const aStarts = aLower.startsWith(inputVal);
+      const bStarts = bLower.startsWith(inputVal);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return aLower.localeCompare(bLower);
+    }).slice(0, 50);
+  }, [searchKey]);
 
   const filteredGalaxies = useMemo(() => {
     const inputVal = selectedGalaxy.trim().toLowerCase();
@@ -140,6 +1005,9 @@ export default function App() {
       if (autocompleteRef.current && !autocompleteRef.current.contains(e.target as Node)) {
         setIsGalaxyDropdownOpen(false);
       }
+      if (civAutocompleteRef.current && !civAutocompleteRef.current.contains(e.target as Node)) {
+        setIsCivDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
@@ -156,6 +1024,8 @@ export default function App() {
   const [matchedRecords, setMatchedRecords] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Reset to first page when search filters or matches change
   useEffect(() => {
@@ -165,10 +1035,45 @@ export default function App() {
   const [itemsPerPage, setItemsPerPage] = useState<number>(15);
   const totalPages = Math.ceil(matchedRecords.length / itemsPerPage);
 
+  const sortedAndMatchedRecords = useMemo(() => {
+    if (!sortColumn) return matchedRecords;
+    return [...matchedRecords].sort((a, b) => {
+      const valA = a[sortColumn];
+      const valB = b[sortColumn];
+      
+      // Attempt numerical comparison
+      const numA = Number(valA);
+      const numB = Number(valB);
+      if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
+        return sortDirection === 'asc' ? numA - numB : numB - numA;
+      }
+      
+      const strA = String(valA || '').trim().toLowerCase();
+      const strB = String(valB || '').trim().toLowerCase();
+      
+      if (strA < strB) return sortDirection === 'asc' ? -1 : 1;
+      if (strA > strB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [matchedRecords, sortColumn, sortDirection]);
+
   const paginatedRecords = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return matchedRecords.slice(start, start + itemsPerPage);
-  }, [matchedRecords, currentPage, itemsPerPage]);
+    return sortedAndMatchedRecords.slice(start, start + itemsPerPage);
+  }, [sortedAndMatchedRecords, currentPage, itemsPerPage]);
+
+  const toggleSort = (columnName: string) => {
+    if (sortColumn === columnName) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortColumn(null); // Reset sort to default (none)
+      }
+    } else {
+      setSortColumn(columnName);
+      setSortDirection('asc');
+    }
+  };
 
   // Save sheet URL to localStorage
   useEffect(() => {
@@ -285,10 +1190,13 @@ export default function App() {
   };
 
   const findRecord = (sourceData: any[], sourceCols: ColumnConfig[], civTerm?: string, galTerm?: string) => {
-    const currentCivTerm = (civTerm ?? searchKey).trim().toLowerCase();
-    const currentGalTerm = (galTerm ?? selectedGalaxy).trim().toLowerCase();
+    let currentCivTerm = (civTerm ?? searchKey).trim().toLowerCase();
+    let currentGalTerm = (galTerm ?? selectedGalaxy).trim().toLowerCase();
     
-    if (!currentCivTerm && currentGalTerm === 'all' && !sourceCols.length) return;
+    // Treat AGT as Alliance of Galactic Travellers
+    if (currentCivTerm === 'agt') {
+      currentCivTerm = 'alliance of galactic travellers';
+    }
 
     // Column B (Galaxy) is at index 1, Column C (Civilization) is at index 2
     const galaxyFieldName = sourceCols[1]?.name;
@@ -301,9 +1209,11 @@ export default function App() {
     }
 
     const matches = sourceData.filter(row => {
+      // IF the user types ALL or leaves blank then this field will match on anything including blank contents in the civilization field
       const civMatch = currentCivTerm === 'all' || !currentCivTerm || 
                       String(row[civFieldName] || '').toLowerCase().includes(currentCivTerm);
-      const galMatch = currentGalTerm === 'all' || 
+      // IF the user types ALL or leaves blank then this field will match on anything including blank contents in the galaxy field
+      const galMatch = currentGalTerm === 'all' || !currentGalTerm ||
                       String(row[galaxyFieldName] || '').toLowerCase().includes(currentGalTerm);
       return civMatch && galMatch;
     });
@@ -336,7 +1246,10 @@ export default function App() {
 
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape layout (297mm x 210mm)
     const galaxyFilterVal = selectedGalaxy || 'All';
-    const civFilterVal = searchKey || 'All';
+    let civFilterVal = searchKey || 'All';
+    if (String(civFilterVal).trim().toUpperCase() === 'AGT') {
+      civFilterVal = 'Alliance of Galactic Travellers';
+    }
     
     const formatDateToDDMMMYYYY = (dateObj: Date): string => {
       const d = String(dateObj.getDate()).padStart(2, '0');
@@ -463,13 +1376,13 @@ export default function App() {
         
         doc.setFontSize(10);
         doc.setFont("Helvetica", "bold");
-        doc.setTextColor(255, 5, 0);
+        doc.setTextColor(0, 0, 0); // Black text for header line
         doc.text(`AGT Region Report - Galaxy: ${galaxyFilterVal} / Civ: ${civFilterVal}`, logoX + 13, logoY + 6);
         
         // Page number to the right side of the header (starts on Page 1)
         doc.setFontSize(8);
         doc.setFont("Helvetica", "normal");
-        doc.setTextColor(150, 150, 150);
+        doc.setTextColor(0, 0, 0); // Black text for page numbers
         doc.text(`Page ${data.pageNumber}`, 277, logoY + 6, { align: "right" });
 
         doc.setDrawColor(255, 5, 0);
@@ -480,7 +1393,7 @@ export default function App() {
         if (data.pageNumber >= 1) {
           doc.setFontSize(8);
           doc.setFont("Helvetica", "normal");
-          doc.setTextColor(150, 150, 150);
+          doc.setTextColor(0, 0, 0); // Black text for footer line
           const footerDateStr = formatDateToDDMMMYYYY(now);
           const militaryTimeStr = formatMilitaryTime(now);
           doc.text(`Report Created on: ${footerDateStr} ${militaryTimeStr}`, 20, 203, { align: "left" });
@@ -582,19 +1495,19 @@ export default function App() {
               }}
             />
             <div className="flex flex-col">
-              <h1 className="font-bold text-xs tracking-[0.2em] uppercase text-[#FFB451]">Alliance of Galactic Travellers</h1>
-              <span className="text-[9px] text-[#FFB451] uppercase tracking-[0.3em] font-bold">AGT Region Report Tool</span>
+              <h1 className="font-bold text-xs tracking-[0.2em] uppercase text-[#FFB451]">{t("Alliance of Galactic Travellers")}</h1>
+              <span className="text-[9px] text-[#FFB451] uppercase tracking-[0.3em] font-bold">{t("AGT Region Report Tool")}</span>
             </div>
           </div>
           
           <div className="flex items-center gap-6">
             <div className="hidden md:block text-[9px] text-[#FFB451] tracking-widest font-mono">
-              STATUS: <span className={
+              {t("STATUS:")} <span className={
                 loading ? 'text-yellow-500' :
                 sheetUrl ? 'text-emerald-500' : 
                 'text-red-500'
               }>
-                {loading ? 'SYNCING' : sheetUrl ? 'CONNECTED' : 'DISCONNECTED'}
+                {loading ? t('SYNCING') : sheetUrl ? t('CONNECTED') : t('DISCONNECTED')}
               </span>
             </div>
             <button 
@@ -621,7 +1534,19 @@ export default function App() {
           {/* Main Search Logic Container - centered aesthetic */}
           <div className="flex flex-col items-center space-y-12">
             <div className="w-full max-w-xl text-center space-y-6">
-              <h2 className="text-4xl font-light tracking-tight text-[#FFB451]">AGT Region Report Tool</h2>
+              
+              {/* Center aligned regions-icon.png before the title */}
+              <div className="flex flex-col items-center justify-center space-y-4">
+                <img 
+                  src={regionsIcon} 
+                  alt="Regions Icon" 
+                  className="w-16 h-16 object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <h2 className="text-4xl font-light tracking-tight text-[#FFB451]">{t("AGT Region Report Tool")}</h2>
+              </div>
               
               {/* Report Format Toggle Switch */}
               <div className="flex justify-center">
@@ -634,7 +1559,7 @@ export default function App() {
                         : 'text-[#FFB451]/55 hover:text-[#FFB451]'
                     }`}
                   >
-                    Simple Report
+                    {t("Simple Report")}
                   </button>
                   <button
                     onClick={() => setReportType('Detailed')}
@@ -644,56 +1569,134 @@ export default function App() {
                         : 'text-[#FFB451]/55 hover:text-[#FFB451]'
                     }`}
                   >
-                    Detailed Report
+                    {t("Detailed Report")}
                   </button>
-                </div>
-              </div>
-
-              <div className="flex flex-col md:flex-row items-center justify-center gap-4">
-                <div className="space-y-1">
-                  <p className="text-[#FFB451] text-[10px] font-bold tracking-widest uppercase">Criteria 1</p>
-                  <p className="text-[#FFB451] text-xs font-bold tracking-widest uppercase">Select Civilization</p>
-                </div>
-                <div className="h-px w-8 bg-[#FFB451]/20 hidden md:block mt-4"></div>
-                <div className="space-y-1">
-                  <p className="text-[#FFB451] text-[10px] font-bold tracking-widest uppercase">Criteria 2</p>
-                  <p className="text-[#FFB451] text-xs font-bold tracking-widest uppercase">Preferred Galaxy</p>
                 </div>
               </div>
             </div>
 
             <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Civilization Dropdown */}
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-[#FFB451] group-focus-within:text-[#FFB451] transition-colors">
+              {/* Civilization Autocomplete Input with label over it */}
+              <div className="flex flex-col space-y-2">
+                <label className="text-[#FFB451] text-[10px] font-mono font-bold tracking-widest uppercase block text-left">
+                  {t("Select Civilization")} (Criteria 1)
+                </label>
+                <div ref={civAutocompleteRef} className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-[#FFB451] group-focus-within:text-[#FFB451] transition-colors z-10">
                   <Search className="h-5 w-5" />
                 </div>
-                <select
+                <input
+                  type="text"
                   value={searchKey}
+                  placeholder={t("Type or select civilization...")}
+                  onFocus={() => {
+                    setIsCivDropdownOpen(true);
+                    setActiveCivIndex(0);
+                  }}
                   onChange={(e) => {
                     const val = e.target.value;
                     setSearchKey(val);
+                    setIsCivDropdownOpen(true);
+                    setActiveCivIndex(0);
                     if (data.length) {
                       findRecord(data, columns, val, selectedGalaxy);
-                    } else {
-                      fetchData();
                     }
                   }}
-                  className="block w-full pl-14 pr-12 py-5 bg-[#2a2a2a] border-2 border-[#FF0500] rounded-full text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FF0500] focus:border-[#FF0500] transition-all text-[#FFB451] appearance-none shadow-[0_0_25px_rgba(255,5,0,0.25)] focus:shadow-[0_0_35px_rgba(255,5,0,0.55)]"
-                  id="civilization-select"
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      if (!isCivDropdownOpen) {
+                        setIsCivDropdownOpen(true);
+                        setActiveCivIndex(0);
+                      } else {
+                        setActiveCivIndex((prev) => (prev + 1) % Math.max(1, filteredCivilizations.length));
+                      }
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      if (isCivDropdownOpen) {
+                        setActiveCivIndex((prev) => (prev - 1 + filteredCivilizations.length) % Math.max(1, filteredCivilizations.length));
+                      }
+                    } else if (e.key === 'Enter') {
+                      if (isCivDropdownOpen && filteredCivilizations.length > 0) {
+                        e.preventDefault();
+                        const selected = filteredCivilizations[activeCivIndex];
+                        if (selected) {
+                          setSearchKey(selected);
+                          setIsCivDropdownOpen(false);
+                          if (data.length) {
+                            findRecord(data, columns, selected, selectedGalaxy);
+                          }
+                        }
+                      }
+                    } else if (e.key === 'Escape') {
+                      setIsCivDropdownOpen(false);
+                    }
+                  }}
+                  className="block w-full pl-14 pr-12 py-5 bg-[#2a2a2a] border-2 border-[#FF0500] rounded-full text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FF0500] focus:border-[#FF0500] transition-all text-[#FFB451] placeholder:text-[#FFB451]/50 shadow-[0_0_25px_rgba(255,5,0,0.25)] focus:shadow-[0_0_35px_rgba(255,5,0,0.55)] animate-glow"
+                  id="civilization-autocomplete"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCivDropdownOpen((prev) => !prev);
+                  }}
+                  className="absolute right-4 inset-y-0 flex items-center text-[#FFB451] hover:text-[#FFB451]/80 focus:outline-none z-10"
                 >
-                  <option value="" disabled className="bg-[#2a2a2a] text-[#FFB451]">-- Choose Civilization --</option>
-                  <option value="All" className="bg-[#2a2a2a] text-[#FFB451]">All</option>
-                  {CIVILIZATIONS.map(civ => (
-                    <option key={civ} value={civ} className="bg-[#2a2a2a] text-[#FFB451]">{civ}</option>
-                  ))}
-                </select>
-                <div className="absolute right-4 inset-y-0 flex items-center pointer-events-none text-[#FFB451]">
-                  <ChevronRight className="w-5 h-5 rotate-90" />
-                </div>
-              </div>
+                  <ChevronRight className={`w-5 h-5 transition-transform duration-200 ${isCivDropdownOpen ? '-rotate-90' : 'rotate-90'}`} />
+                </button>
 
-              {/* Galaxy Dropdown/Search */}
+                <AnimatePresence>
+                  {isCivDropdownOpen && filteredCivilizations.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute left-0 right-0 mt-2 max-h-60 overflow-y-auto bg-[#1a1a1a] border-2 border-[#FF0500] rounded-2xl shadow-[0_10px_35px_rgba(255,5,0,0.45)] z-50 overflow-hidden divide-y divide-[#FF0500]/10 slim-scroll"
+                    >
+                      {filteredCivilizations.map((civ, idx) => {
+                        const isActive = idx === activeCivIndex;
+                        return (
+                          <div
+                            key={civ}
+                            onClick={() => {
+                              setSearchKey(civ);
+                              setIsCivDropdownOpen(false);
+                              if (data.length) {
+                                findRecord(data, columns, civ, selectedGalaxy);
+                              }
+                            }}
+                            onMouseEnter={() => {
+                              setActiveCivIndex(idx);
+                            }}
+                            className={`px-6 py-3 cursor-pointer text-base font-mono transition-all flex items-center justify-between ${
+                              isActive 
+                                ? 'bg-[#FF0500]/20 text-white font-bold border-l-4 border-l-[#FF0500]' 
+                                : 'text-[#FFB451] hover:text-[#FFB451]/80 hover:bg-[#FF0500]/5'
+                            }`}
+                          >
+                            <span>{civ}</span>
+                            {civ === 'All' && (
+                              <span className="text-[10px] uppercase bg-[#FF0500]/20 text-white tracking-widest font-bold px-2 py-0.5 rounded">
+                                {t("Show All")}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Galaxy Dropdown/Search with label over it */}
+            <div className="flex flex-col space-y-2">
+              <label className="text-[#FFB451] text-[10px] font-mono font-bold tracking-widest uppercase block text-left">
+                {t("Preferred Galaxy")} (Criteria 2)
+              </label>
               <div ref={autocompleteRef} className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-[#FFB451] group-focus-within:text-[#FFB451] transition-colors z-10">
                   <Globe className="h-5 w-5" />
@@ -701,7 +1704,7 @@ export default function App() {
                 <input
                   type="text"
                   value={selectedGalaxy}
-                  placeholder="Type or select galaxy..."
+                  placeholder={t("Type or select galaxy...")}
                   onFocus={() => {
                     setIsGalaxyDropdownOpen(true);
                     setActiveGalaxyIndex(0);
@@ -793,7 +1796,7 @@ export default function App() {
                             <span>{gal}</span>
                             {gal === 'All' && (
                               <span className="text-[10px] uppercase bg-[#FF0500]/20 text-white tracking-widest font-bold px-2 py-0.5 rounded">
-                                Show All
+                                {t("Show All")}
                               </span>
                             )}
                           </div>
@@ -804,10 +1807,12 @@ export default function App() {
                 </AnimatePresence>
               </div>
             </div>
+          </div>
 
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={handleSearch}
-              disabled={loading || (!searchKey && selectedGalaxy === 'All')}
+              disabled={loading}
               className="px-20 py-5 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-full font-black text-sm uppercase tracking-[0.2em] hover:bg-[#FF0500]/85 active:scale-[0.96] disabled:opacity-25 disabled:pointer-events-none shadow-[0_4px_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.5)] transition-all flex items-center gap-2 cursor-pointer"
               id="fetch-btn"
             >
@@ -816,10 +1821,27 @@ export default function App() {
               ) : (
                 <>
                   <RefreshCw className="w-5 h-5 text-white" />
-                  <span className="text-white">Extract Reports</span>
+                  <span className="text-white">{t("Extract Reports")}</span>
                 </>
               )}
             </button>
+
+            <button
+              onClick={() => {
+                setSearchKey('');
+                setSelectedGalaxy('');
+                if (data.length) {
+                  findRecord(data, columns, '', '');
+                }
+              }}
+              className="px-8 py-5 bg-[#161616] border-2 border-[#FF0500]/40 text-[#FFB451] hover:text-white hover:border-[#FF0500] rounded-full font-black text-xs uppercase tracking-[0.15em] hover:bg-[#FF0500]/15 active:scale-[0.96] transition-all flex items-center gap-2 cursor-pointer shadow-[0_4px_15px_rgba(0,0,0,0.2)]"
+              id="reset-btn"
+              title={t("Reset Fields")}
+            >
+              <RotateCcw className="w-4.5 h-4.5 text-[#FF0500]" />
+              <span>{t("Reset Fields")}</span>
+            </button>
+          </div>
 
             {error && (
               <motion.div 
@@ -865,31 +1887,15 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Data Section */}
-                    <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
-                      <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
-                        <Database className="w-3 h-3 text-[#FFB451]" />
-                        Source Identity
-                      </h3>
-                      <div className="space-y-4">
-                        <button 
-                          onClick={fetchData}
-                          className="w-full py-4 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/85 transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
-                        >
-                          Re-Sync Region Data
-                        </button>
-                      </div>
-                    </div>
-
                     {/* Display Settings Section */}
                     <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
                       <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                         <Sliders className="w-3 h-3 text-[#FFB451]" />
-                        Display Settings
+                        {t("Display Settings")}
                       </h3>
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">Max Records on screen</span>
+                          <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">{t("Max Records on screen")}</span>
                           <select
                             value={itemsPerPage}
                             onChange={(e) => {
@@ -898,15 +1904,15 @@ export default function App() {
                             }}
                             className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
                           >
-                            <option value={15} className="bg-[#161616] text-[#FFB451]">15 Records</option>
-                            <option value={30} className="bg-[#161616] text-[#FFB451]">30 Records</option>
-                            <option value={50} className="bg-[#161616] text-[#FFB451]">50 Records</option>
-                            <option value={100} className="bg-[#161616] text-[#FFB451]">100 Records</option>
+                            <option value={15} className="bg-[#161616] text-[#FFB451]">{t("15 Records")}</option>
+                            <option value={30} className="bg-[#161616] text-[#FFB451]">{t("30 Records")}</option>
+                            <option value={50} className="bg-[#161616] text-[#FFB451]">{t("50 Records")}</option>
+                            <option value={100} className="bg-[#161616] text-[#FFB451]">{t("100 Records")}</option>
                           </select>
                         </div>
 
                         <div className="space-y-2">
-                          <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">Text Scaling (Desktop Mode)</span>
+                          <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">{t("Text Scaling (Desktop Mode)")}</span>
                           <select
                             value={textScale}
                             onChange={(e) => {
@@ -915,11 +1921,43 @@ export default function App() {
                             }}
                             className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
                           >
-                            <option value="1" className="bg-[#161616] text-[#FFB451]">1x (Default)</option>
-                            <option value="1.5" className="bg-[#161616] text-[#FFB451]">1.5x</option>
-                            <option value="2" className="bg-[#161616] text-[#FFB451]">2x</option>
-                            <option value="2.5" className="bg-[#161616] text-[#FFB451]">2.5x</option>
-                            <option value="3" className="bg-[#161616] text-[#FFB451]">3x</option>
+                            <option value="1" className="bg-[#161616] text-[#FFB451]">{t("1x (Default)")}</option>
+                            <option value="1.5" className="bg-[#161616] text-[#FFB451]">{t("1.5x")}</option>
+                            <option value="2" className="bg-[#161616] text-[#FFB451]">{t("2x")}</option>
+                            <option value="2.5" className="bg-[#161616] text-[#FFB451]">{t("2.5x")}</option>
+                            <option value="3" className="bg-[#161616] text-[#FFB451]">{t("3x")}</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Language Settings Section */}
+                    <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
+                      <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
+                        <Globe className="w-3 h-3 text-[#FFB451]" />
+                        {t("Select Language")}
+                      </h3>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">{t("Select Language")}</span>
+                          <select
+                            value={language}
+                            onChange={(e) => {
+                              const newLang = e.target.value as any;
+                              setLanguage(newLang);
+                              localStorage.setItem('agt_language', newLang);
+                            }}
+                            className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
+                          >
+                            <option value="en" className="bg-[#161616] text-[#FFB451]">English (EN)</option>
+                            <option value="fr" className="bg-[#161616] text-[#FFB451]">Français (FR)</option>
+                            <option value="es" className="bg-[#161616] text-[#FFB451]">Español (ES)</option>
+                            <option value="de" className="bg-[#161616] text-[#FFB451]">Deutsch (DE)</option>
+                            <option value="pt" className="bg-[#161616] text-[#FFB451]">Português (PT)</option>
+                            <option value="th" className="bg-[#161616] text-[#FFB451]">ไทย (TH)</option>
+                            <option value="hi" className="bg-[#161616] text-[#FFB451]">हिन्दी (HI)</option>
+                            <option value="ja" className="bg-[#161616] text-[#FFB451]">日本語 (JA)</option>
+                            <option value="zh" className="bg-[#161616] text-[#FFB451]">中文 (ZH)</option>
                           </select>
                         </div>
                       </div>
@@ -931,7 +1969,7 @@ export default function App() {
                         <div className="space-y-1">
                           <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                             <Volume2 className="w-3 h-3 text-[#FFB451]" />
-                            AGT Anthem
+                            {t("AGT Anthem")}
                           </h3>
                         </div>
                         <button 
@@ -941,8 +1979,26 @@ export default function App() {
                           }`}
                         >
                           {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-white" /> : <VolumeX className="w-3.5 h-3.5 text-white" />}
-                          {audioEnabled ? 'Active' : 'Muted'}
+                          {audioEnabled ? t('Active') : t('Muted')}
                         </button>
+                      </div>
+                    </div>
+
+                    {/* Region DB Source Section (last setting) */}
+                    <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
+                      <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30 col-span-1 md:col-span-2">
+                        <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
+                          <Database className="w-3 h-3 text-[#FFB451]" />
+                          {t("Region DB Source")}
+                        </h3>
+                        <div className="space-y-4">
+                          <button 
+                            onClick={fetchData}
+                            className="w-full py-4 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/85 transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                          >
+                            {t("Re-Sync Region Data")}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -965,12 +2021,12 @@ export default function App() {
                     <div className="p-8 border-b border-[#FF0500]/20 flex flex-col md:flex-row md:items-center justify-between gap-6">
                       <div className="space-y-1">
                         <h3 className="text-xl font-medium text-[#FFB451] flex items-center gap-3">
-                          AGT Galactic Archives Results
+                          {t("AGT Galactic Archives Results")}
                           <span className="px-2 py-0.5 rounded-full bg-[#FF0500]/10 text-[10px] text-[#FFB451] border border-[#FF0500]/45 font-mono">
-                            {matchedRecords.length} FOUND
+                            {matchedRecords.length} {t("FOUND")}
                           </span>
                         </h3>
-                        <p className="text-[10px] text-[#FFB451] uppercase tracking-[0.2em]">Verified Galactic Ledger Matches</p>
+                        <p className="text-[10px] text-[#FFB451] uppercase tracking-[0.2em]">{t("Verified Galactic Ledger Matches")}</p>
                       </div>
  
                       {/* Download and Export Buttons Preceding the Record List */}
@@ -981,7 +2037,7 @@ export default function App() {
                             className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                           >
                             <FileText className="w-3.5 h-3.5" />
-                            <span>Export PDF</span>
+                            <span>{t("Export PDF")}</span>
                           </button>
                         )}
                         <button
@@ -989,20 +2045,39 @@ export default function App() {
                           className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                         >
                           <Download className="w-3.5 h-3.5" />
-                          <span>Export CSV</span>
+                          <span>{t("Export CSV")}</span>
                         </button>
                       </div>
                     </div>
  
-                    <div className="overflow-x-auto custom-scrollbar">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[620px] custom-scrollbar relative">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="bg-[#FF0500]/[0.05] border-b border-[#FF0500]/25">
-                            {columns.filter(col => col.enabled).map((col, idx) => (
-                              <th key={idx} className="py-2 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] whitespace-nowrap">
-                                {col.name}
-                              </th>
-                            ))}
+                          <tr className="bg-[#161616] border-b border-[#FF0500]/25 sticky top-0 z-20 shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                            {columns.filter(col => col.enabled).map((col, idx) => {
+                              const isSorted = sortColumn === col.name;
+                              return (
+                                <th 
+                                  key={idx} 
+                                  onClick={() => toggleSort(col.name)}
+                                  className="py-3.5 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] whitespace-nowrap cursor-pointer hover:bg-[#FF0500]/10 hover:text-white transition-all group/th"
+                                  title={`${t("Click to sort by")} ${t(col.name)}`}
+                                >
+                                  <div className="flex items-center gap-2 select-none">
+                                    <span>{t(col.name)}</span>
+                                    {isSorted ? (
+                                      sortDirection === 'asc' ? (
+                                        <ChevronUp className="w-3.5 h-3.5 text-[#FF0500] shrink-0" />
+                                      ) : (
+                                        <ChevronDown className="w-3.5 h-3.5 text-[#FF0500] shrink-0" />
+                                      )
+                                    ) : (
+                                      <ArrowUpDown className="w-3 h-3 text-[#FFB451]/30 group-hover/th:text-[#FFB451]/60 shrink-0 transition-colors" />
+                                    )}
+                                  </div>
+                                </th>
+                              );
+                            })}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#FF0500]/20">
@@ -1041,9 +2116,9 @@ export default function App() {
                               return (
                                 <td key={idx} className="py-2 px-4 text-[0.6875rem] font-bold text-[#FFB451]">
                                   {isTotalCol ? (
-                                    <span>TOTAL: {totalPoints}</span>
+                                    <span>{t("TOTAL:")} {totalPoints}</span>
                                   ) : isFirstCol ? (
-                                    <span className="uppercase tracking-widest text-[0.625rem] text-[#FFB451] font-bold">Number of Regions</span>
+                                    <span className="uppercase tracking-widest text-[0.625rem] text-[#FFB451] font-bold">{t("Number of Regions")}</span>
                                   ) : null}
                                 </td>
                               );
@@ -1057,7 +2132,7 @@ export default function App() {
                     {totalPages > 1 && (
                       <div className="py-3 px-8 border-t border-[#FF0500]/20 bg-[#FF0500]/[0.01] flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="text-[10px] font-mono text-[#FFB451] uppercase tracking-wider">
-                          Showing Page <span className="text-[#FFB451] font-bold decoration-2">{currentPage}</span> of <span className="text-[#FFB451] font-bold">{totalPages}</span> ({matchedRecords.length} total rows)
+                          {t("Showing Page")} <span className="text-[#FFB451] font-bold decoration-2">{currentPage}</span> {t("of")} <span className="text-[#FFB451] font-bold">{totalPages}</span> ({matchedRecords.length || 0} {t("total rows")})
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <button 
@@ -1065,14 +2140,14 @@ export default function App() {
                             onClick={() => setCurrentPage(1)}
                             className="px-2.5 py-1.5 rounded-lg border-2 border-[#FF0500] bg-[#FF0500] text-white text-[9px] font-black uppercase tracking-wider hover:bg-[#FF0500]/85 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.1)]"
                           >
-                            First
+                            {t("First")}
                           </button>
                           <button 
                             disabled={currentPage === 1}
                             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                             className="px-2.5 py-1.5 rounded-lg border-2 border-[#FF0500] bg-[#FF0500] text-white text-[9px] font-black uppercase tracking-wider hover:bg-[#FF0500]/85 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.1)]"
                           >
-                            Prev
+                            {t("Prev")}
                           </button>
  
                           {Array.from({ length: totalPages }, (_, i) => i + 1).map((pg) => {
@@ -1104,14 +2179,14 @@ export default function App() {
                             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                             className="px-2.5 py-1.5 rounded-lg border-2 border-[#FF0500] bg-[#FF0500] text-white text-[9px] font-black uppercase tracking-wider hover:bg-[#FF0500]/85 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.1)]"
                           >
-                            Next
+                            {t("Next")}
                           </button>
                           <button 
                             disabled={currentPage === totalPages}
                             onClick={() => setCurrentPage(totalPages)}
                             className="px-2.5 py-1.5 rounded-lg border-2 border-[#FF0500] bg-[#FF0500] text-white text-[9px] font-black uppercase tracking-wider hover:bg-[#FF0500]/85 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.1)]"
                           >
-                            Last
+                            {t("Last")}
                           </button>
                         </div>
                       </div>
@@ -1121,14 +2196,14 @@ export default function App() {
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#FF0500] shadow-[0_0_8px_rgba(255,5,0,0.5)]"></div>
-                          <span className="text-[9px] uppercase tracking-widest text-[#FFB451] font-bold">Ledger Integrity: Verified</span>
+                          <span className="text-[9px] uppercase tracking-widest text-[#FFB451] font-bold">{t("Ledger Integrity: Verified")}</span>
                         </div>
                         <span className="text-[9px] font-mono text-[#FFB451] uppercase tracking-widest hidden md:inline">
-                          Index Reference: {Math.random().toString(16).substring(2, 8).toUpperCase()}
+                          {t("Index Reference:")} {Math.random().toString(16).substring(2, 8).toUpperCase()}
                         </span>
                       </div>
                       <div className="text-[9px] uppercase tracking-[0.2em] font-mono text-[#FFB451]">
-                        AGT SECURE ARCHIVE CLIENT
+                        {t("AGT SECURE ARCHIVE CLIENT")}
                       </div>
                     </div>
                   </motion.section>
@@ -1143,8 +2218,8 @@ export default function App() {
                       <Database className="w-6 h-6 text-[#FFB451]" />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#FFB451]">Terminal Ready</p>
-                      <p className="text-xs font-light text-[#FFB451]">Report Generation Sequence Pending Civilization Selection</p>
+                      <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#FFB451]">{t("Terminal Ready")}</p>
+                      <p className="text-xs font-light text-[#FFB451]">{t("Report Generation Sequence Pending Civilization Selection")}</p>
                     </div>
                   </motion.div>
                 )}
@@ -1212,7 +2287,7 @@ export default function App() {
               transition={{ delay: 0.3, duration: 0.5 }}
               className="text-[#FF0500] text-sm uppercase tracking-[0.25em] font-extrabold text-center mt-6"
             >
-              Processing Galactic Archive...
+              {t("Processing Galactic Archive...")}
             </motion.p>
           </motion.div>
         )}

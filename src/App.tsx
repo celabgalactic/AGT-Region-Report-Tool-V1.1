@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
+import React, { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -37,6 +37,7 @@ import regionsIcon from './regions-icon.png';
 interface ColumnConfig {
   name: string;
   enabled: boolean;
+  colIndex?: number;
 }
 
 interface TranslationDict {
@@ -50,6 +51,7 @@ interface TranslationDict {
     hi: string;
     ja: string;
     zh: string;
+    it?: string;
   };
 }
 
@@ -64,7 +66,8 @@ const TRANSLATIONS: TranslationDict = {
     th: "พันธมิตรนักเดินทางแห่งกาแล็กซี",
     hi: "गैलेक्टिक यात्रियों का गठबंधन",
     ja: "銀河旅行者同盟",
-    zh: "星际旅行者联盟"
+    zh: "星际旅行者联盟",
+    it: "Alleanza dei Viaggiatori Galattici"
   },
   "AGT Region Report Tool": {
     en: "AGT Region Report Tool",
@@ -853,6 +856,7 @@ const TRANSLATIONS: TranslationDict = {
 interface ColumnConfig {
   name: string;
   enabled: boolean;
+  colIndex?: number;
 }
 
 export default function App() {
@@ -933,7 +937,7 @@ export default function App() {
     }
   };
 
-  const [language, setLanguage] = useState<'en' | 'fr' | 'es' | 'de' | 'pt' | 'th' | 'zh' | 'hi' | 'ja'>(() => {
+  const [language, setLanguage] = useState<'en' | 'fr' | 'es' | 'de' | 'pt' | 'th' | 'zh' | 'hi' | 'ja' | 'it'>(() => {
     let saved = localStorage.getItem('agt_language') as any;
     if (saved === 'ru') saved = 'th';
     return saved || 'en';
@@ -945,10 +949,13 @@ export default function App() {
     if (entry && entry[language]) {
       return entry[language];
     }
+    if (entry && entry['en']) {
+      return entry['en'];
+    }
     // Try case-insensitive lookup
     for (const k of Object.keys(TRANSLATIONS)) {
       if (k.toLowerCase() === normalizedKey.toLowerCase()) {
-        return TRANSLATIONS[k][language];
+        return TRANSLATIONS[k][language] || TRANSLATIONS[k]['en'] || key;
       }
     }
     return key;
@@ -964,9 +971,33 @@ export default function App() {
   const [activeGalaxyIndex, setActiveGalaxyIndex] = useState(0);
   const autocompleteRef = useRef<HTMLDivElement>(null);
 
+  const [allRawRows, setAllRawRows] = useState<string[][]>([]);
+
+  const dynamicCivilizations = useMemo(() => {
+    const civSet = new Set<string>();
+    if (allRawRows && allRawRows.length >= 2) {
+      allRawRows.slice(2).forEach(row => {
+        const colA = String(row[0] || '').trim();
+        if (colA !== '' && !colA.startsWith('SKIPROW')) {
+          const civVal = String(row[2] || '').trim();
+          if (civVal) {
+            civSet.add(civVal);
+          }
+        }
+      });
+    }
+    return Array.from(civSet);
+  }, [allRawRows]);
+
+  const allCivilizations = useMemo(() => {
+    const combined = new Set<string>(CIVILIZATIONS);
+    dynamicCivilizations.forEach(civ => combined.add(civ));
+    return Array.from(combined);
+  }, [dynamicCivilizations]);
+
   const filteredCivilizations = useMemo(() => {
     const inputVal = searchKey.trim().toLowerCase();
-    const options = ['All', ...CIVILIZATIONS];
+    const options = ['All', ...allCivilizations];
     if (!inputVal) {
       return options.slice(0, 50);
     }
@@ -980,7 +1011,7 @@ export default function App() {
       if (!aStarts && bStarts) return 1;
       return aLower.localeCompare(bLower);
     }).slice(0, 50);
-  }, [searchKey]);
+  }, [searchKey, allCivilizations]);
 
   const filteredGalaxies = useMemo(() => {
     const inputVal = selectedGalaxy.trim().toLowerCase();
@@ -1016,7 +1047,6 @@ export default function App() {
   }, []);
 
   const [reportType, setReportType] = useState<'Simple' | 'Detailed'>('Simple');
-  const [allRawRows, setAllRawRows] = useState<string[][]>([]);
   const [data, setData] = useState<any[]>([]);
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1061,6 +1091,63 @@ export default function App() {
     const start = (currentPage - 1) * itemsPerPage;
     return sortedAndMatchedRecords.slice(start, start + itemsPerPage);
   }, [sortedAndMatchedRecords, currentPage, itemsPerPage]);
+
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState<number>(0);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+
+  const handleTopScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
+
+  const handleTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (topScrollRef.current) {
+      topScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
+
+  useEffect(() => {
+    if (tableContainerRef.current) {
+      const timer = setTimeout(() => {
+        if (tableContainerRef.current) {
+          setTableScrollWidth(tableContainerRef.current.scrollWidth);
+          setContainerWidth(tableContainerRef.current.clientWidth);
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [paginatedRecords, columns]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (tableContainerRef.current) {
+        setTableScrollWidth(tableContainerRef.current.scrollWidth);
+        setContainerWidth(tableContainerRef.current.clientWidth);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && tableContainerRef.current) {
+      observer = new ResizeObserver(() => {
+        if (tableContainerRef.current) {
+          setTableScrollWidth(tableContainerRef.current.scrollWidth);
+          setContainerWidth(tableContainerRef.current.clientWidth);
+        }
+      });
+      observer.observe(tableContainerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (observer) observer.disconnect();
+    };
+  }, []);
+
+  const isScrollNeeded = tableScrollWidth > containerWidth && containerWidth > 0;
 
   const toggleSort = (columnName: string) => {
     if (sortColumn === columnName) {
@@ -1149,7 +1236,8 @@ export default function App() {
         if (idx === 32) baseName = headers[32] || "AG";
         return {
           name: baseName,
-          enabled: true
+          enabled: true,
+          colIndex: idx
         };
       });
 
@@ -1341,7 +1429,14 @@ export default function App() {
 
     const tableHeaders = columns.filter(col => col.enabled).map(col => col.name);
     const tableData = matchedRecords.map(record => 
-      columns.filter(col => col.enabled).map(col => record[col.name] || '-')
+      columns.filter(col => col.enabled).map(col => {
+        const val = record[col.name];
+        if (col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32) {
+          const isValid = typeof val === 'string' && val.trim().length > 0;
+          return isValid ? 'LINK' : '-';
+        }
+        return record[col.name] || '-';
+      })
     );
 
     // Add total row to PDF
@@ -1353,6 +1448,13 @@ export default function App() {
     });
     tableData.push(totalRow);
 
+    const colStyles: { [key: number]: any } = {};
+    columns.filter(col => col.enabled).forEach((col, idx) => {
+      if (col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32) {
+        colStyles[idx] = { cellWidth: 14 }; // Comfortable width for "LINK" (4 characters) plus padding
+      }
+    });
+
     autoTable(doc, {
       startY: 28, // start table below repeating header boundary at Y=22
       head: [tableHeaders],
@@ -1360,6 +1462,7 @@ export default function App() {
       theme: 'grid',
       headStyles: { fillColor: [42, 42, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
       bodyStyles: { fontSize: 8, textColor: [30, 30, 30] },
+      columnStyles: colStyles,
       margin: { top: 30, left: 20, right: 20 },
       didDrawPage: (data) => {
         // Draw recurring header on every records page
@@ -1405,6 +1508,31 @@ export default function App() {
           data.cell.styles.fillColor = [245, 245, 245];
           data.cell.styles.textColor = [255, 5, 0];
           data.cell.styles.fontStyle = 'bold';
+        } else {
+          const enabledCols = columns.filter(col => col.enabled);
+          const colInfo = enabledCols[data.column.index];
+          if (colInfo && (colInfo.colIndex === 20 || colInfo.colIndex === 21 || colInfo.colIndex === 22 || colInfo.colIndex === 32)) {
+            if (data.cell.text && data.cell.text[0] === 'LINK') {
+              data.cell.styles.textColor = [0, 85, 204]; // Blue color for hyperlink
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        }
+      },
+      didDrawCell: (data) => {
+        if (data.section === 'body' && data.row.index < tableData.length - 1) {
+          const enabledCols = columns.filter(col => col.enabled);
+          const colInfo = enabledCols[data.column.index];
+          if (colInfo && (colInfo.colIndex === 20 || colInfo.colIndex === 21 || colInfo.colIndex === 22 || colInfo.colIndex === 32)) {
+            const record = matchedRecords[data.row.index];
+            if (record) {
+              const rawVal = record[colInfo.name];
+              if (rawVal && typeof rawVal === 'string' && rawVal.trim().length > 0) {
+                const url = rawVal.match(/^https?:\/\//i) ? rawVal.trim() : `https://${rawVal.trim()}`;
+                doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url });
+              }
+            }
+          }
         }
       }
     });
@@ -1579,7 +1707,7 @@ export default function App() {
               {/* Civilization Autocomplete Input with label over it */}
               <div className="flex flex-col space-y-2">
                 <label className="text-[#FFB451] text-[10px] font-mono font-bold tracking-widest uppercase block text-left">
-                  {t("Select Civilization")} (Criteria 1)
+                  {t("Select Civilization")}
                 </label>
                 <div ref={civAutocompleteRef} className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-[#FFB451] group-focus-within:text-[#FFB451] transition-colors z-10">
@@ -1695,7 +1823,7 @@ export default function App() {
             {/* Galaxy Dropdown/Search with label over it */}
             <div className="flex flex-col space-y-2">
               <label className="text-[#FFB451] text-[10px] font-mono font-bold tracking-widest uppercase block text-left">
-                {t("Preferred Galaxy")} (Criteria 2)
+                {t("Preferred Galaxy")}
               </label>
               <div ref={autocompleteRef} className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-[#FFB451] group-focus-within:text-[#FFB451] transition-colors z-10">
@@ -1958,6 +2086,7 @@ export default function App() {
                             <option value="hi" className="bg-[#161616] text-[#FFB451]">हिन्दी (HI)</option>
                             <option value="ja" className="bg-[#161616] text-[#FFB451]">日本語 (JA)</option>
                             <option value="zh" className="bg-[#161616] text-[#FFB451]">中文 (ZH)</option>
+                            <option value="it" className="bg-[#161616] text-[#FFB451]">Italiano (IT)</option>
                           </select>
                         </div>
                       </div>
@@ -2050,17 +2179,37 @@ export default function App() {
                       </div>
                     </div>
  
-                    <div className="overflow-x-auto overflow-y-auto max-h-[620px] custom-scrollbar relative">
+                    {/* Top synchronized horizontal scrollbar when needed */}
+                    {isScrollNeeded && (
+                      <div 
+                        ref={topScrollRef} 
+                        onScroll={handleTopScroll} 
+                        className="overflow-x-auto custom-scrollbar w-full bg-[#161616] border-b border-[#FF0500]/25"
+                      >
+                        <div style={{ width: `${tableScrollWidth}px` }} className="h-1.5"></div>
+                      </div>
+                    )}
+
+                    <div 
+                      ref={tableContainerRef}
+                      onScroll={handleTableScroll}
+                      className="overflow-x-auto overflow-y-auto max-h-[620px] custom-scrollbar relative"
+                    >
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-[#161616] border-b border-[#FF0500]/25 sticky top-0 z-20 shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                             {columns.filter(col => col.enabled).map((col, idx) => {
                               const isSorted = sortColumn === col.name;
+                              const isNarrowUrlCol = col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32;
+                              const headerStyle = isNarrowUrlCol 
+                                ? { width: 'calc(4ch + 2rem)', minWidth: 'calc(4ch + 2rem)', maxWidth: 'calc(4ch + 2rem)' } 
+                                : undefined;
                               return (
                                 <th 
                                   key={idx} 
                                   onClick={() => toggleSort(col.name)}
-                                  className="py-3.5 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] whitespace-nowrap cursor-pointer hover:bg-[#FF0500]/10 hover:text-white transition-all group/th"
+                                  style={headerStyle}
+                                  className="py-3.5 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] whitespace-nowrap cursor-pointer hover:bg-[#FF0500]/10 hover:text-white transition-all group/th overflow-hidden text-ellipsis"
                                   title={`${t("Click to sort by")} ${t(col.name)}`}
                                 >
                                   <div className="flex items-center gap-2 select-none">
@@ -2085,12 +2234,30 @@ export default function App() {
                             <tr key={rIdx} className="hover:bg-white/[0.04] transition-colors group">
                               {columns.filter(col => col.enabled).map((col, cIdx) => {
                                 const val = record[col.name];
-                                const isLinkCol = col.name === 'NMS Wiki Link' || String(col.name).toLowerCase().includes('wiki') || String(col.name).toLowerCase().includes('link');
+                                const isNarrowUrlCol = col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32;
+                                const isLinkCol = isNarrowUrlCol || col.name === 'NMS Wiki Link' || String(col.name).toLowerCase().includes('wiki') || String(col.name).toLowerCase().includes('link');
                                 const isValidUrl = typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'));
                                 
+                                const cellStyle = isNarrowUrlCol 
+                                  ? { width: 'calc(4ch + 2rem)', minWidth: 'calc(4ch + 2rem)', maxWidth: 'calc(4ch + 2rem)' } 
+                                  : undefined;
+                                
                                 return (
-                                  <td key={cIdx} className="py-1.5 px-4 text-[0.71875rem] leading-none text-[#FFB451] font-mono whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]">
-                                    {isLinkCol && val && (isValidUrl || val.includes('.')) ? (
+                                  <td 
+                                    key={cIdx} 
+                                    style={cellStyle}
+                                    className="py-1.5 px-4 text-[0.71875rem] leading-none text-[#FFB451] font-mono whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]"
+                                  >
+                                    {isNarrowUrlCol && val && (isValidUrl || val.includes('.')) ? (
+                                      <a 
+                                        href={isValidUrl ? val : `https://${val}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        className="text-[#3b82f6] hover:text-blue-400 hover:underline font-black cursor-pointer"
+                                      >
+                                        LINK
+                                      </a>
+                                    ) : isLinkCol && val && (isValidUrl || val.includes('.')) ? (
                                       <a 
                                         href={isValidUrl ? val : `https://${val}`} 
                                         target="_blank" 
@@ -2195,7 +2362,10 @@ export default function App() {
                     <div className="p-6 border-t border-[#FF0500]/20 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-[#FF0500]/[0.01]">
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#FF0500] shadow-[0_0_8px_rgba(255,5,0,0.5)]"></div>
+                          <div className="relative flex items-center justify-center w-2.5 h-2.5">
+                            <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
+                          </div>
                           <span className="text-[9px] uppercase tracking-widest text-[#FFB451] font-bold">{t("Ledger Integrity: Verified")}</span>
                         </div>
                         <span className="text-[9px] font-mono text-[#FFB451] uppercase tracking-widest hidden md:inline">

@@ -24,7 +24,8 @@ import {
   ArrowUpDown,
   ChevronUp,
   ChevronDown,
-  RotateCcw
+  RotateCcw,
+  User
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
@@ -68,6 +69,54 @@ const TRANSLATIONS: TranslationDict = {
     ja: "銀河旅行者同盟",
     zh: "星际旅行者联盟",
     it: "Alleanza dei Viaggiatori Galattici"
+  },
+  "Public User": {
+    en: "Public User",
+    fr: "Utilisateur Public",
+    es: "Usuario Público",
+    de: "Öffentlicher Benutzer",
+    pt: "Usuário Público",
+    th: "ผู้ใช้ทั่วไป",
+    hi: "सार्वजनिक उपयोगकर्ता",
+    ja: "一般ユーザー",
+    zh: "公共用户",
+    it: "Utente Pubblico"
+  },
+  "Classified Records Omitted": {
+    en: "Classified Records Omitted",
+    fr: "Dossiers Classifiés Omis",
+    es: "Registros Clasificados Omitidos",
+    de: "Klassifizierte Datensätze ausgelassen",
+    pt: "Registros Classificados Omitidos",
+    th: "ละเว้นบันทึกชั้นความลับ",
+    hi: "वर्गीकृत रिकॉर्ड छोड़े गए",
+    ja: "省かれた機密レコード",
+    zh: "省略机密记录",
+    it: "Record Classificati Omessi"
+  },
+  "Omit Public Records": {
+    en: "Omit Public Records",
+    fr: "Omettre les Dossiers Publics",
+    es: "Omitir Registros Públicos",
+    de: "Öffentliche Datensätze auslassen",
+    pt: "Omitir Registros Públicos",
+    th: "ละเว้นบันทึกสาธารณะ",
+    hi: "सार्वजनिक रिकॉर्ड छोड़ें",
+    ja: "一般レコードを省略",
+    zh: "省略公共记录",
+    it: "Ometti Record Pubblici"
+  },
+  "Omit Private Records": {
+    en: "Omit Private Records",
+    fr: "Omettre les Dossiers Privés",
+    es: "Omitir Registros Privados",
+    de: "Private Datensätze auslassen",
+    pt: "Omitir Registros Privados",
+    th: "ละเว้นบันทึกส่วนตัว",
+    hi: "निजी रिकॉर्ड छोड़ें",
+    ja: "非公開レコードを省略",
+    zh: "省略私有记录",
+    it: "Ometti Record Privati"
   },
   "AGT Region Report Tool": {
     en: "AGT Region Report Tool",
@@ -1060,6 +1109,95 @@ const getColumnStyle = (colIndex: number | undefined) => {
   return undefined;
 };
 
+// --- AGT Traveller Verification & Cookies Helpers ---
+
+export const getCookie = (name: string): string => {
+  if (typeof document === 'undefined') return '';
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return decodeURIComponent(parts.pop()?.split(';').shift() || '');
+  return '';
+};
+
+export const getSecurityLevel = (val: any): number => {
+  if (val === undefined || val === null) return 0;
+  const str = String(val).trim().toLowerCase();
+  
+  if (str === 'public' || str === '0') return 0;
+  if (str === 'private' || str === '1') return 1;
+  if (str === 'restricted' || str === '2') return 2;
+  if (str === 'top secret' || str === '3') return 3;
+  if (str === 'slt restricted' || str === '4') return 4;
+  if (str === 'scc restricted' || str === '5') return 5;
+  
+  if (str.includes('scc')) return 5;
+  if (str.includes('slt')) return 4;
+  if (str.includes('top secret') || str.includes('topsecret')) return 3;
+  if (str.includes('restricted')) return 2;
+  if (str.includes('private')) return 1;
+  if (str.includes('public')) return 0;
+  
+  return 0; // Default is Public
+};
+
+export const decodeXOR = (encodedText: string): string => {
+  const key = 969; 
+  let decoded = ""; 
+  for (let i = 0; i < encodedText.length; i++) { 
+    let charCode = encodedText.charCodeAt(i); 
+    let originalCharCode = charCode ^ key; 
+    decoded += String.fromCharCode(originalCharCode); 
+  } 
+  return decoded; 
+};
+
+export interface VerificationResult {
+  success: boolean;
+  securityLevel?: number;
+  error?: string;
+}
+
+export const verifyTravellerCredentials = async (nameInput: string, idInput: string): Promise<VerificationResult> => {
+  try {
+    const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOZq3Cl2e0aNqzXdLRe63HuM7PlqGH3HnS_-0x6P_CYnGDJlK5QvI-YjU0lNaOgLyp3uoktS4WIXyK/pub?gid=505079663&single=true&output=tsv";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Could not fetch VerifyID sheet");
+    const tsvText = await res.text();
+    
+    // Split by lines, then by tabs since it's TSV format
+    const rows = tsvText.split(/\r?\n/).map(line => line.split('\t'));
+    const cleanName = nameInput.trim();
+    const cleanId = idInput.trim();
+    
+    let matchedRow: string[] | null = null;
+    for (const r of rows) {
+      if (r[0] && r[0].trim() === cleanName) {
+        matchedRow = r;
+        break;
+      }
+    }
+    
+    if (!matchedRow) {
+      return { success: false, error: 'mismatch' };
+    }
+    
+    const encodedB = matchedRow[1] || '';
+    const decodedB = decodeXOR(encodedB).trim();
+    
+    if (decodedB !== cleanId) {
+      return { success: false, error: 'mismatch' };
+    }
+    
+    const secLevelVal = matchedRow[2]?.trim() || '';
+    const numericLevel = getSecurityLevel(secLevelVal);
+    
+    return { success: true, securityLevel: numericLevel };
+  } catch (err) {
+    console.error(err);
+    return { success: false, error: 'fetch_error' };
+  }
+};
+
 export default function App() {
   const [sheetUrl, setSheetUrl] = useState<string>(() => {
     const saved = localStorage.getItem('sheet_reporter_url');
@@ -1114,6 +1252,24 @@ export default function App() {
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const [pdfErrorMsg, setPdfErrorMsg] = useState<string | null>(null);
+
+  // Traveller Identity Verification States
+  const [settingsTravellerName, setSettingsTravellerName] = useState<string>(() => getCookie('travellerName') || '');
+  const [settingsTravellerId, setSettingsTravellerId] = useState<string>(() => getCookie('travellerId') || '');
+  const [activeTravellerName, setActiveTravellerName] = useState<string>(() => getCookie('travellerName') || '');
+  const [activeTravellerId, setActiveTravellerId] = useState<string>(() => getCookie('travellerId') || '');
+  const [activeSecurityLevel, setActiveSecurityLevel] = useState<number>(() => {
+    const lvl = parseInt(getCookie('securityLevel') || '', 10);
+    return isNaN(lvl) ? 0 : lvl;
+  });
+  const [omitPublicRecords, setOmitPublicRecords] = useState<boolean>(false);
+  const [omitPrivateRecords, setOmitPrivateRecords] = useState<boolean>(false);
+  const [classifiedOmittedCount, setClassifiedOmittedCount] = useState<number>(0);
+  const [verifyLoading, setVerifyLoading] = useState<boolean>(false);
+  const [isGeneratingFile, setIsGeneratingFile] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [verifyValidationError, setVerifyValidationError] = useState<string | null>(null);
+  const [popupMsg, setPopupMsg] = useState<React.ReactNode | null>(null);
 
   // Initial fetch and manual font loading
   useEffect(() => {
@@ -1413,6 +1569,7 @@ export default function App() {
     }
 
     setLoading(true);
+    setIsSyncing(true);
     setError(null);
     setMatchedRecords([]);
 
@@ -1441,20 +1598,24 @@ export default function App() {
           if (rawRows.length < 2) {
             setError('The source sheet data is insufficient (need at least 2 rows).');
             setLoading(false);
+            setIsSyncing(false);
             return;
           }
 
           setAllRawRows(rawRows);
           setLoading(false);
+          setIsSyncing(false);
         },
         error: (err: any) => {
           setError(`Parsing error: ${err.message}`);
           setLoading(false);
+          setIsSyncing(false);
         }
       });
     } catch (err: any) {
       setError(err.message || 'Operation failed');
       setLoading(false);
+      setIsSyncing(false);
     }
   };
 
@@ -1492,16 +1653,16 @@ export default function App() {
             const headerName = filteredColumns[listIdx].name;
             rowObj[headerName] = row[colIdx] || '';
           });
+          // Store security classification from Column AE (index 30)
+          rowObj._securityClass = row[30] || '';
           return rowObj;
         });
 
       setData(processedData);
 
-      if (searchKey || selectedGalaxy !== 'All') {
-        findRecord(processedData, filteredColumns, searchKey, selectedGalaxy);
-      }
+      findRecord(processedData, filteredColumns, searchKey, selectedGalaxy);
     }
-  }, [reportType, customReportToggles, allRawRows]);
+  }, [reportType, customReportToggles, allRawRows, activeTravellerName, activeTravellerId, activeSecurityLevel, omitPublicRecords, omitPrivateRecords, searchKey, selectedGalaxy]);
 
   const handleSearch = () => {
     setIsExtracting(true);
@@ -1530,6 +1691,7 @@ export default function App() {
     
     if (!civFieldName || !galaxyFieldName) {
       setMatchedRecords([]);
+      setClassifiedOmittedCount(0);
       setError('Required matching fields not found.');
       return;
     }
@@ -1544,9 +1706,39 @@ export default function App() {
       return civMatch && galMatch;
     });
 
+    const hasCookieCreds = !!(activeTravellerName && activeTravellerId);
+    const userSecLevel = hasCookieCreds ? activeSecurityLevel : 0;
+
+    // Filter matches based on security level, Omit Public Records, & Omit Private Records preference
+    let omittedCount = 0;
+    const authorizedAndOmitChecked = matches.filter(record => {
+      const lvl = getSecurityLevel(record._securityClass);
+      if (lvl > userSecLevel) {
+        omittedCount++;
+        return false;
+      }
+      
+      // Omit Private Records filter: if credentials exist and "Omit Private Records" is checked, we only display level === 0 records (i.e. lvl > 0 are omitted)
+      if (hasCookieCreds && omitPrivateRecords) {
+        if (lvl > 0) {
+          omittedCount++;
+          return false;
+        }
+      }
+      
+      // Omit Public Records filter: if credentials exist and "Omit Public Records" is checked, we only display level > 0 records
+      if (hasCookieCreds && omitPublicRecords) {
+        return lvl > 0;
+      }
+      
+      return true;
+    });
+
+    setClassifiedOmittedCount(omittedCount);
+
     // Sort by Column B (Galaxy) then Column A (Region Name)
     const nameFieldName = sourceCols[0]?.name;
-    const sortedMatches = [...matches].sort((a, b) => {
+    const sortedMatches = [...authorizedAndOmitChecked].sort((a, b) => {
       const galA = String(a[galaxyFieldName] || '').toLowerCase();
       const galB = String(b[galaxyFieldName] || '').toLowerCase();
       
@@ -1567,7 +1759,68 @@ export default function App() {
   };
 
   const downloadFullReportPdf = async () => {
-    if (matchedRecords.length === 0) return;
+    // Check authorization first!
+    const nameCookie = getCookie('travellerName');
+    const idCookie = getCookie('travellerId');
+    const preFilledName = settingsTravellerName.trim();
+    const preFilledId = settingsTravellerId.trim();
+
+    const cookieOk = !!(nameCookie && idCookie);
+    const preFilledOk = !!(preFilledName && preFilledId);
+
+    if (!cookieOk && !preFilledOk) {
+      setPopupMsg("PDF Report and Export CSV is only available to registered AGT Travellers. Enter your credientials in the setting menu");
+      return;
+    }
+
+    let userSecLvl = 0;
+    if (cookieOk) {
+      const lvl = parseInt(getCookie('securityLevel') || '', 10);
+      userSecLvl = isNaN(lvl) ? 0 : lvl;
+    } else if (preFilledOk) {
+      setLoading(true);
+      const result = await verifyTravellerCredentials(preFilledName, preFilledId);
+      setLoading(false);
+      if (result.success) {
+        userSecLvl = result.securityLevel ?? 0;
+        // Save to cookie since credentials matched successfully
+        document.cookie = `travellerName=${encodeURIComponent(preFilledName)}; path=/; max-age=31536000; SameSite=Lax`;
+        document.cookie = `travellerId=${encodeURIComponent(preFilledId)}; path=/; max-age=31536000; SameSite=Lax`;
+        document.cookie = `securityLevel=${encodeURIComponent(String(userSecLvl))}; path=/; max-age=31536000; SameSite=Lax`;
+        setActiveTravellerName(preFilledName);
+        setActiveTravellerId(preFilledId);
+        setActiveSecurityLevel(userSecLvl);
+      } else {
+        setPopupMsg(
+          <div className="space-y-3">
+            <div className="text-sm font-bold text-red-500">Verification unsuccessful for pre-filled credentials. Export aborted.</div>
+            <div className="text-xs text-[#FFB451]/80 leading-relaxed font-sans mt-1">
+              Traveller Name and ID and does not match, Please consult{" "}
+              <a 
+                href="https://www.nms-agt.com/support/traveller-id" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="underline text-white hover:text-[#FFB451] font-bold"
+              >
+                AGT Support
+              </a>
+            </div>
+          </div>
+        );
+        return;
+      }
+    }
+
+    // Filter matchedRecords by security classification
+    const recordsToBuild = matchedRecords.filter(record => {
+      const recLvl = getSecurityLevel(record._securityClass);
+      return recLvl <= userSecLvl;
+    });
+
+    if (recordsToBuild.length === 0) {
+      setPopupMsg("No records match your security clearance for PDF Export.");
+      return;
+    }
 
     if (reportType === 'Custom') {
       const getRequiredColWidth = (colIdx: number): number => {
@@ -1607,7 +1860,11 @@ export default function App() {
       }
     }
 
-    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape layout (297mm x 210mm)
+    setIsGeneratingFile(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const doc = new jsPDF('l', 'mm', 'a4'); // Landscape layout (297mm x 210mm)
     const galaxyFilterVal = selectedGalaxy || 'All';
     let civFilterVal = searchKey || 'All';
     if (String(civFilterVal).trim().toUpperCase() === 'AGT') {
@@ -1666,6 +1923,28 @@ export default function App() {
 
     // COVER PAGE SETUP
     // 20% from the top of the cover page (210mm total height -> 20% works out to exactly 42mm center point)
+    let maxLvl = 0;
+    recordsToBuild.forEach(record => {
+      const lvl = getSecurityLevel(record._securityClass);
+      if (lvl > maxLvl) maxLvl = lvl;
+    });
+
+    const levelNames: { [key: number]: string } = {
+      1: "Private",
+      2: "Restricted",
+      3: "Top Secret",
+      4: "SLT Restricted",
+      5: "SCC Restricted"
+    };
+
+    if (maxLvl > 0) {
+      const levelWord = levelNames[maxLvl] || '';
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(255, 5, 0);
+      doc.text(`This report contains ${levelWord} Intelligence`, 148.5, 26, { align: "center" });
+    }
+
     if (logoBase64) {
       doc.addImage(logoBase64, 'PNG', 130.5, 36, 36, 36);
     } else {
@@ -1732,7 +2011,7 @@ export default function App() {
     };
 
     const tableHeaders = columns.filter(col => col.enabled).map(col => col.name);
-    const tableData = matchedRecords.map(record => 
+    const tableData = recordsToBuild.map(record => 
       columns.filter(col => col.enabled).map(col => {
         const val = record[col.name];
         if (col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32) {
@@ -1751,7 +2030,7 @@ export default function App() {
     // Add total row to PDF
     const totalFieldName = columns[4]?.name || 'Points';
     const totalRow = columns.filter(col => col.enabled).map(col => {
-      if (col.name === totalFieldName) return `TOTAL: ${totalPoints}`;
+      if (col.name === totalFieldName) return `TOTAL: ${recordsToBuild.length}`;
       if (col.name === columns[0]?.name) return 'Number of Regions';
       return '';
     });
@@ -1899,40 +2178,123 @@ export default function App() {
     const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
 
     doc.save(`AGT_Region_Report_${timestamp}.pdf`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsGeneratingFile(false);
+    }
   };
 
-  const downloadFullReportCsv = () => {
-    if (matchedRecords.length === 0) return;
+  const downloadFullReportCsv = async () => {
+    // Check authorization first!
+    const nameCookie = getCookie('travellerName');
+    const idCookie = getCookie('travellerId');
+    const preFilledName = settingsTravellerName.trim();
+    const preFilledId = settingsTravellerId.trim();
 
-    const displayHeaders = columns.filter(col => col.enabled).map(col => col.name);
-    const rows = matchedRecords.map(record =>
-      columns.filter(col => col.enabled).map(col => record[col.name] || '')
-    );
+    const cookieOk = !!(nameCookie && idCookie);
+    const preFilledOk = !!(preFilledName && preFilledId);
 
-    const totalFieldName = columns[4]?.name || 'Points';
-    const totalRow = columns.filter(col => col.enabled).map(col => {
-      if (col.name === totalFieldName) return `TOTAL: ${totalPoints}`;
-      if (col.name === columns[0]?.name) return 'Number of Regions';
-      return '';
+    if (!cookieOk && !preFilledOk) {
+      setPopupMsg("PDF Report and Export CSV is only available to registered AGT Travellers. Enter your credientials in the setting menu");
+      return;
+    }
+
+    let userSecLvl = 0;
+    if (cookieOk) {
+      const lvl = parseInt(getCookie('securityLevel') || '', 10);
+      userSecLvl = isNaN(lvl) ? 0 : lvl;
+    } else if (preFilledOk) {
+      setLoading(true);
+      const result = await verifyTravellerCredentials(preFilledName, preFilledId);
+      setLoading(false);
+      if (result.success) {
+        userSecLvl = result.securityLevel ?? 0;
+        // Save to cookie since credentials matched successfully
+        document.cookie = `travellerName=${encodeURIComponent(preFilledName)}; path=/; max-age=31536000; SameSite=Lax`;
+        document.cookie = `travellerId=${encodeURIComponent(preFilledId)}; path=/; max-age=31536000; SameSite=Lax`;
+        document.cookie = `securityLevel=${encodeURIComponent(String(userSecLvl))}; path=/; max-age=31536000; SameSite=Lax`;
+        setActiveTravellerName(preFilledName);
+        setActiveTravellerId(preFilledId);
+        setActiveSecurityLevel(userSecLvl);
+      } else {
+        setPopupMsg(
+          <div className="space-y-3">
+            <div className="text-sm font-bold text-red-500">Verification unsuccessful for pre-filled credentials. Export aborted.</div>
+            <div className="text-xs text-[#FFB451]/80 leading-relaxed font-sans mt-1">
+              Traveller Name and ID and does not match, Please consult{" "}
+              <a 
+                href="https://www.nms-agt.com/support/traveller-id" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="underline text-white hover:text-[#FFB451] font-bold"
+              >
+                AGT Support
+              </a>
+            </div>
+          </div>
+        );
+        return;
+      }
+    }
+
+    // Filter matchedRecords by security classification
+    const recordsToBuild = matchedRecords.filter(record => {
+      const recLvl = getSecurityLevel(record._securityClass);
+      return recLvl <= userSecLvl;
     });
-    rows.push(totalRow);
 
-    const csvContent = Papa.unparse({
-      fields: displayHeaders,
-      data: rows
-    });
+    if (recordsToBuild.length === 0) {
+      setPopupMsg("No records match your security clearance for CSV Export.");
+      return;
+    }
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const displayId = searchKey || 'Bulk';
-    const filename = displayId.replace(/[^a-z0-9]/gi, '_');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `agt_full_report_${filename}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    setIsGeneratingFile(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const displayHeaders = columns.filter(col => col.enabled).map(col => col.name);
+      const rows = recordsToBuild.map(record =>
+        columns.filter(col => col.enabled).map(col => record[col.name] || '')
+      );
+
+      const totalFieldName = columns[4]?.name || 'Points';
+      const totalRow = columns.filter(col => col.enabled).map(col => {
+        if (col.name === totalFieldName) return `TOTAL: ${recordsToBuild.length}`;
+        if (col.name === columns[0]?.name) return 'Number of Regions';
+        return '';
+      });
+      rows.push(totalRow);
+
+      const csvContent = Papa.unparse({
+        fields: displayHeaders,
+        data: rows
+      });
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const timestamp = `${year}-${month}-${day} ${hours}_${minutes}_${seconds}`;
+
+      link.setAttribute('href', url);
+      link.setAttribute('download', `AGT Region Report ${timestamp}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsGeneratingFile(false);
+    }
   };
 
   const toggleColumn = (name: string) => {
@@ -2002,6 +2364,17 @@ export default function App() {
                 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.7)]'
               }`} />
             </div>
+            
+            {activeTravellerName && activeTravellerId ? (
+              <div className="border border-green-500 text-green-500 px-3 py-1 bg-green-500/5 rounded-xl text-[11px] font-mono font-bold tracking-wider">
+                {activeTravellerName.substring(0, 20)}
+              </div>
+            ) : (
+              <div className="border border-[#FF0500] text-[#FF0500] px-3 py-1 bg-[#FF0500]/5 rounded-xl text-[11px] font-mono font-bold tracking-wider font-semibold">
+                {t("Public User")}
+              </div>
+            )}
+
             <button 
               onClick={() => setShowSettings(!showSettings)}
               className="p-2 hover:bg-[#FF0500]/10 rounded-lg transition-colors relative group cursor-pointer"
@@ -2308,6 +2681,49 @@ export default function App() {
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Omit Public/Private Records selection boxes (visible only if there are credentials saved) */}
+              {(activeTravellerName && activeTravellerId) && (
+                <div className="flex flex-wrap items-center gap-6 mt-3 select-none">
+                  <label className="flex items-center gap-2.5 cursor-pointer text-[#FFB451] hover:text-white transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={omitPublicRecords}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setOmitPublicRecords(checked);
+                        if (checked) {
+                          setOmitPrivateRecords(false);
+                        }
+                      }}
+                      className="w-4.5 h-4.5 rounded border-2 border-[#FF0500] bg-[#1a1a1a] text-[#FF0500] focus:ring-1 focus:ring-[#FF0500]/50 accent-[#FF0500] cursor-pointer"
+                      id="omit-public"
+                    />
+                    <span className="text-xs font-mono tracking-wider uppercase font-bold text-[#FFB451] hover:text-white transition-colors">
+                      {t("Omit Public Records")}
+                    </span>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 cursor-pointer text-[#FFB451] hover:text-white transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={omitPrivateRecords}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setOmitPrivateRecords(checked);
+                        if (checked) {
+                          setOmitPublicRecords(false);
+                        }
+                      }}
+                      className="w-4.5 h-4.5 rounded border-2 border-[#FF0500] bg-[#1a1a1a] text-[#FF0500] focus:ring-1 focus:ring-[#FF0500]/50 accent-[#FF0500] cursor-pointer"
+                      id="omit-private"
+                    />
+                    <span className="text-xs font-mono tracking-wider uppercase font-bold text-[#FFB451] hover:text-white transition-colors">
+                      {t("Omit Private Records")}
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
           </div>
 
@@ -2384,6 +2800,41 @@ export default function App() {
                   <div className="pt-4 w-full">
                     <button 
                       onClick={() => setPdfErrorMsg(null)}
+                      className="w-full px-5 py-3 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                    >
+                      {t("Close")}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* General/Authentication Popup Message Modal Overlay */}
+          <AnimatePresence>
+            {popupMsg && (
+              <div 
+                className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] flex items-center justify-center p-4 pointer-events-auto"
+                onClick={() => setPopupMsg(null)}
+              >
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0, y: 15 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 15 }}
+                  transition={{ type: "spring", duration: 0.4 }}
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-sm w-full p-6 shadow-2xl flex flex-col items-center text-center space-y-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="w-12 h-12 rounded-full border-2 border-[#FF0500] flex items-center justify-center bg-[#FF0500]/10 text-[#FF0500]">
+                    <AlertCircle className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451]">{t("System Alert")}</h3>
+                  <div className="text-xs text-[#FFB451]/80 leading-relaxed font-mono">
+                    {popupMsg}
+                  </div>
+                  <div className="pt-2 w-full">
+                    <button 
+                      onClick={() => setPopupMsg(null)}
                       className="w-full px-5 py-3 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                     >
                       {t("Close")}
@@ -2561,6 +3012,184 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* Traveller Registration Section */}
+                    <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
+                      <div className="border-2 border-[#FF0500] p-5 rounded-xl bg-black/30 col-span-1 md:col-span-2 space-y-5">
+                        <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
+                          <User className="w-3.5 h-3.5 text-[#FFB451]" />
+                          {t("AGT Traveller Registration")}
+                        </h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Traveller Name */}
+                          <div className="space-y-1">
+                            <label className="text-[9px] uppercase tracking-wider text-[#FFB451]/60 font-mono font-bold">
+                              {t("Traveller Name")}
+                            </label>
+                            <input
+                              type="text"
+                              value={settingsTravellerName}
+                              maxLength={42}
+                              onChange={(e) => {
+                                setSettingsTravellerName(e.target.value.substring(0, 42));
+                              }}
+                              placeholder={t("Enter Traveller Name...")}
+                              className="w-full px-4 py-3 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
+                            />
+                          </div>
+
+                          {/* Traveller ID */}
+                          <div className="space-y-1">
+                            <label className="text-[9px] uppercase tracking-wider text-[#FFB451]/60 font-mono font-bold">
+                              {t("AGT Traveller ID")}
+                            </label>
+                            <input
+                              type="text"
+                              value={settingsTravellerId}
+                              maxLength={18}
+                              onChange={(e) => {
+                                let val = e.target.value.toUpperCase();
+                                val = val.replace(/[^A-Z0-9-]/g, '');
+                                setSettingsTravellerId(val);
+                                setVerifyValidationError(null);
+                              }}
+                              placeholder="37411005-HN4T-7407"
+                              className="w-full px-4 py-3 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
+                            />
+                          </div>
+                        </div>
+
+                        {verifyValidationError && (
+                          <div className="text-[10px] text-red-500 font-mono flex items-center gap-1.5 bg-red-950/20 p-2.5 rounded-lg border border-red-500/10">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{verifyValidationError}</span>
+                          </div>
+                        )}
+
+                        {/* Control buttons */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                          {/* Save & Verify */}
+                          <button
+                            type="button"
+                            disabled={verifyLoading}
+                            onClick={async () => {
+                              const cleanName = settingsTravellerName.trim();
+                              const cleanId = settingsTravellerId.trim();
+                              
+                              if (!cleanName || !cleanId) {
+                                setVerifyValidationError("Both Traveller Name and ID are required.");
+                                return;
+                              }
+
+                              const idPattern = /^[0-9]{8}-[0-9A-Z]{4}-[0-9]{4}$/;
+                              if (!idPattern.test(cleanId)) {
+                                setVerifyValidationError("AGT Traveller ID must match format: ########-????-#### (e.g., 37411005-HN4T-7407)");
+                                return;
+                              }
+
+                              setVerifyValidationError(null);
+                              setVerifyLoading(true);
+                              try {
+                                const result = await verifyTravellerCredentials(cleanName, cleanId);
+                                if (result.success) {
+                                  const secLvl = result.securityLevel ?? 0;
+                                  
+                                  // Set cookies
+                                  document.cookie = `travellerName=${encodeURIComponent(cleanName)}; path=/; max-age=31536000; SameSite=Lax`;
+                                  document.cookie = `travellerId=${encodeURIComponent(cleanId)}; path=/; max-age=31536000; SameSite=Lax`;
+                                  document.cookie = `securityLevel=${encodeURIComponent(String(secLvl))}; path=/; max-age=31536000; SameSite=Lax`;
+                                  
+                                  // Update state
+                                  setActiveTravellerName(cleanName);
+                                  setActiveTravellerId(cleanId);
+                                  setActiveSecurityLevel(secLvl);
+                                  
+                                  // Verify cookie was created properly
+                                  const savedName = getCookie('travellerName');
+                                  const savedId = getCookie('travellerId');
+                                  
+                                  if (savedName === cleanName && savedId === cleanId) {
+                                    setPopupMsg("Verification successful, setting saved");
+                                  } else {
+                                    setPopupMsg("Verification successful, setting save error");
+                                  }
+                                } else {
+                                  // Display the error message with support link
+                                  setPopupMsg(
+                                    <div className="space-y-3">
+                                      <div className="text-sm font-bold text-red-500">Verification unsuccessful</div>
+                                      <div className="text-xs text-[#FFB451]/80 leading-relaxed font-sans mt-1">
+                                        Traveller Name and ID and does not match, Please consult{" "}
+                                        <a 
+                                          href="https://www.nms-agt.com/support/traveller-id" 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="underline text-white hover:text-[#FFB451] font-bold animate-pulse"
+                                        >
+                                          AGT Support
+                                        </a>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              } catch (err) {
+                                setPopupMsg("Verification unsuccessful");
+                              } finally {
+                                setVerifyLoading(false);
+                              }
+                            }}
+                            className="w-full py-3 bg-[#FF0500] hover:bg-[#FF0500]/85 border-2 border-[#FF0500] text-white disabled:opacity-50 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] flex items-center justify-center gap-2"
+                          >
+                            {verifyLoading ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : null}
+                            <span>{verifyLoading ? t("Verifying...") : t("Save & Verify")}</span>
+                          </button>
+
+                          {/* Clear / Reset */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Delete cookies
+                              document.cookie = "travellerName=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+                              document.cookie = "travellerId=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+                              document.cookie = "securityLevel=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+
+                              const isDeleted = !getCookie('travellerName') && !getCookie('travellerId');
+                              if (isDeleted) {
+                                setPopupMsg("Clearing successful");
+                                setSettingsTravellerName("");
+                                setSettingsTravellerId("");
+                                setActiveTravellerName("");
+                                setActiveTravellerId("");
+                                setActiveSecurityLevel(0);
+                                setVerifyValidationError(null);
+                              } else {
+                                setPopupMsg("Clearing failed");
+                              }
+                            }}
+                            className="w-full py-3 bg-transparent border-2 border-[#FFB451]/20 hover:border-[#FFB451]/40 text-[#FFB451] rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>{t("Clear Credentials")}</span>
+                          </button>
+                        </div>
+
+                        {activeTravellerName && (
+                          <div className="text-[10px] font-mono text-[#FFB451]/60 pt-1.5 border-t border-white/5 flex flex-wrap items-center justify-between gap-2">
+                            <span>{t("Verified User")}: <strong className="text-white">{activeTravellerName}</strong></span>
+                            <span>{t("Clearance")}: <strong className="text-green-400 uppercase">
+                              {activeSecurityLevel === 5 ? "SCC Restricted (5)" :
+                               activeSecurityLevel === 4 ? "SLT Restricted (4)" :
+                               activeSecurityLevel === 3 ? "Top Secret (3)" :
+                               activeSecurityLevel === 2 ? "Restricted (2)" :
+                               activeSecurityLevel === 1 ? "Private (1)" : "Public (0)"}
+                            </strong></span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Audio Section */}
                     <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
                       <div className="flex items-center justify-between border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
@@ -2617,13 +3246,22 @@ export default function App() {
                     className="rounded-2xl overflow-hidden border-2 border-[#FF0500] shadow-[0_0_30px_rgba(255,5,0,0.15)] bg-black/40"
                   >
                     <div className="p-8 border-b border-[#FF0500]/20 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div className="space-y-1">
-                        <h3 className="text-xl font-medium text-[#FFB451] flex items-center gap-3">
-                          {t("AGT Galactic Archives Results")}
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h3 className="text-xl font-medium text-[#FFB451]">
+                            {t("AGT Galactic Archives Results")}
+                          </h3>
                           <span className="px-2 py-0.5 rounded-full bg-[#FF0500]/10 text-[10px] text-[#FFB451] border border-[#FF0500]/45 font-mono">
                             {matchedRecords.length} {t("FOUND")}
                           </span>
-                        </h3>
+                        </div>
+                        
+                        <div className="flex items-center">
+                          <span className="px-2 py-0.5 rounded-full bg-[#FF0500]/10 text-[10px] text-[#FFB451] border border-[#FF0500]/45 font-mono">
+                            {t("Classified Records Omitted:")} {classifiedOmittedCount}
+                          </span>
+                        </div>
+
                         <p className="text-[10px] text-[#FFB451] uppercase tracking-[0.2em]">{t("Verified Galactic Ledger Matches")}</p>
                       </div>
  
@@ -2943,6 +3581,64 @@ export default function App() {
             >
               {t("Processing Galactic Archive...")}
             </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* File Generation Loading Overlay */}
+      <AnimatePresence>
+        {isGeneratingFile && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[260] flex flex-col items-center justify-center p-4 pointer-events-auto"
+          >
+            <motion.img
+              src="/AGTIcon.png"
+              alt="AGT Icon"
+              className="w-48 h-48 object-contain"
+              animate={{ rotateY: 360 }}
+              transition={{ repeat: Infinity, duration: 2.5, ease: "linear" }}
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                if (img.src !== window.location.origin + "/AgtOfficialLogo.png") {
+                  img.src = "/AgtOfficialLogo.png";
+                }
+              }}
+            />
+            <p className="text-[#FF0500] text-sm uppercase tracking-[0.25em] font-extrabold text-center mt-6">
+              Preparing AGT Data Packet
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Database Syncing Loading Overlay */}
+      <AnimatePresence>
+        {isSyncing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[260] flex flex-col items-center justify-center p-4 pointer-events-auto"
+          >
+            <motion.img
+              src="/AGTIcon.png"
+              alt="AGT Icon"
+              className="w-48 h-48 object-contain"
+              animate={{ rotateY: 360 }}
+              transition={{ repeat: Infinity, duration: 2.5, ease: "linear" }}
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                if (img.src !== window.location.origin + "/AgtOfficialLogo.png") {
+                  img.src = "/AgtOfficialLogo.png";
+                }
+              }}
+            />
+            <p className="text-[#FF0500] text-sm uppercase tracking-[0.25em] font-extrabold text-center mt-6">
+              AGT Galactic Archive Sync In Progress
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

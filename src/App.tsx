@@ -146,6 +146,28 @@ const TRANSLATIONS: TranslationDict = {
     ja: "閉じる",
     zh: "关闭"
   },
+  "Limit Exceeded": {
+    en: "Limit Exceeded",
+    fr: "Limite Dépassée",
+    es: "Límite Excedido",
+    de: "Limit überschritten",
+    pt: "Limite Excedido",
+    th: "เกินขีดจำกัด",
+    hi: "सीमा पार हो गई",
+    ja: "制限超過",
+    zh: "超出限制"
+  },
+  "PDF Export": {
+    en: "PDF Export",
+    fr: "Exportation PDF",
+    es: "Exportación PDF",
+    de: "PDF-Export",
+    pt: "Exportação PDF",
+    th: "ดาวน์โหลด PDF",
+    hi: "पीडीएफ निर्यात",
+    ja: "PDFエクスポート",
+    zh: "PDF导出"
+  },
   "Display Settings": {
     en: "Display Settings",
     fr: "Paramètres d'Affichage",
@@ -310,6 +332,61 @@ const TRANSLATIONS: TranslationDict = {
     hi: "विस्तृत रिपोर्ट",
     ja: "詳細レポート",
     zh: "详细报告"
+  },
+  "Custom Report": {
+    en: "Custom Report",
+    fr: "Rapport Personnalisé",
+    es: "Informe Personalizado",
+    de: "Benutzerdefinierter Bericht",
+    pt: "Relatório Personalizado",
+    th: "รายงานที่กำหนดเอง",
+    hi: "कस्टम रिपोर्ट",
+    ja: "カスタムレポート",
+    zh: "自定义报告"
+  },
+  "Custom Report Toggles": {
+    en: "Custom Report Toggles",
+    fr: "Boutons de Rapport Personnalisé",
+    es: "Interruptores de Informe Personalizado",
+    de: "Berichtsspalten anpassen",
+    pt: "Alternadores de Relatório Personalizado",
+    th: "สลับคอลัมน์รายงานที่กำหนดเอง",
+    hi: "कस्टम रिपोर्ट टॉगल",
+    ja: "カスタムレポートの切り替え",
+    zh: "自定义报告切换"
+  },
+  "Select All": {
+    en: "Select All",
+    fr: "Tout Sélectionner",
+    es: "Seleccionar Todo",
+    de: "Alle auswählen",
+    pt: "Selecionar Tudo",
+    th: "เลือกทั้งหมด",
+    hi: "सभी चुनें",
+    ja: "すべて選択",
+    zh: "全选"
+  },
+  "Click to sort by": {
+    en: "Click to sort by",
+    fr: "Cliquer pour trier par",
+    es: "Haga clic para ordenar por",
+    de: "Klicken, um zu sortieren nach",
+    pt: "Clique para ordenar por",
+    th: "คลิกเพื่อจัดเรียงตาม",
+    hi: "क्रमबद्ध करने के लिए क्लिक करें",
+    ja: "クリックして並べ替え",
+    zh: "点击按此排序"
+  },
+  "Unselect All": {
+    en: "Unselect All",
+    fr: "Tout Désélectionner",
+    es: "Deseleccionar Todo",
+    de: "Alle abwählen",
+    pt: "Desmarcar Tudo",
+    th: "ยกเลิกการเลือกทั้งหมด",
+    hi: "सभी अचयनित करें",
+    ja: "すべて選択解除",
+    zh: "取消全选"
   },
   "Criteria 1": {
     en: "Criteria 1",
@@ -859,6 +936,130 @@ interface ColumnConfig {
   colIndex?: number;
 }
 
+const AVAILABLE_CUSTOM_TOGGLES = [
+  { idx: 1, letter: 'B', label: 'Galaxy' },
+  { idx: 2, letter: 'C', label: 'Civilized' },
+  { idx: 3, letter: 'D', label: 'Coordinates' },
+  { idx: 4, letter: 'E', label: 'Quadrant' },
+  { idx: 9, letter: 'J', label: 'Game Release' },
+  { idx: 10, letter: 'K', label: 'Earliest Surveyor' },
+  { idx: 11, letter: 'L', label: 'Latest Surveyor' },
+  { idx: 12, letter: 'M', label: 'Latest Survey' },
+  { idx: 13, letter: 'N', label: 'Summary Notes' },
+  { idx: 14, letter: 'O', label: 'Location Notes' },
+  { idx: 15, letter: 'P', label: 'Additional Notes' },
+  { idx: 16, letter: 'Q', label: 'Civilized Notes' },
+  { idx: 18, letter: 'S', label: 'Region Age' },
+  { idx: 19, letter: 'T', label: 'Lowest Known Phantom System' },
+  { idx: 20, letter: 'U', label: 'Wiki Link' },
+  { idx: 21, letter: 'V', label: 'External Link' },
+  { idx: 22, letter: 'W', label: 'Video Link' },
+  { idx: 23, letter: 'X', label: 'Light Year Estimate' },
+  { idx: 31, letter: 'AF', label: 'Legacy Name' },
+  { idx: 32, letter: 'AG', label: 'Legacy Wiki Link' }
+];
+
+const getColumnStyle = (colIndex: number | undefined) => {
+  if (colIndex === undefined) return undefined;
+  
+  // Link / URL columns (U, V, W, AG)
+  if (colIndex === 20 || colIndex === 21 || colIndex === 22 || colIndex === 32) {
+    return { 
+      width: 'calc(4ch + 2rem)', 
+      minWidth: 'calc(4ch + 2rem)', 
+      maxWidth: 'calc(4ch + 2rem)' 
+    };
+  }
+  
+  // Column T (Lowest Known Phantom System) - never require more than 3 characters in row data
+  // Header: "Lowest Known Phantom System"
+  // Optimal two-line split: "Lowest Known" (12ch) / "Phantom System" (14ch)
+  // Max word length: "Phantom" (7ch) or "System" (6ch).
+  // Min column width is set to at least 15.5ch to fit the longest line with sort icon buffer.
+  if (colIndex === 19) {
+    return { 
+      width: 'calc(16ch + 1.5rem)', 
+      minWidth: 'calc(15.5ch + 1.5rem)', 
+      maxWidth: 'calc(18ch + 1.5rem)',
+      boxSizing: 'border-box' as const
+    };
+  }
+  
+  // Column S (Region Age) - never require more than 4 characters in row data
+  // Header: "Region Age"
+  // Two-line split: "Region" (6ch) / "Age" (3ch)
+  // Min width is set with sort icon buffer to prevent mid-word break and keep within 2 lines.
+  if (colIndex === 18) {
+    return { 
+      width: 'calc(8ch + 1.5rem)', 
+      minWidth: 'calc(7.5ch + 1.5rem)', 
+      maxWidth: 'calc(10ch + 1.5rem)',
+      boxSizing: 'border-box' as const
+    };
+  }
+  
+  // Column M (Auto Latest Survey) - never require more than 11 characters in row data
+  // Header: "Auto Latest Survey" (18ch)
+  // Two-line split: "Auto Latest" (11ch) / "Survey" (6ch)
+  if (colIndex === 12) {
+    return { 
+      width: 'calc(14ch + 1.5rem)', 
+      minWidth: 'calc(12.5ch + 1.5rem)', 
+      maxWidth: 'calc(16ch + 1.5rem)',
+      boxSizing: 'border-box' as const
+    };
+  }
+  
+  // Column X (Light Years Estimate) - never require more than 9 characters in row data
+  // Header: "Light Year Estimate" (19ch)
+  // Two-line split: "Light Year" (10ch) or "Light Years" (11ch) / "Estimate" (8ch)
+  if (colIndex === 23) {
+    return { 
+      width: 'calc(13ch + 1.5rem)', 
+      minWidth: 'calc(12.5ch + 1.5rem)', 
+      maxWidth: 'calc(15ch + 1.5rem)',
+      boxSizing: 'border-box' as const
+    };
+  }
+  
+  // Galaxy (B) - auto adjusted to be narrower
+  // Header: "Galaxy" (6ch)
+  if (colIndex === 1) {
+    return { 
+      width: 'calc(10ch + 1.5rem)', 
+      minWidth: 'calc(8ch + 1.5rem)', 
+      maxWidth: 'calc(12ch + 1.5rem)',
+      boxSizing: 'border-box' as const
+    };
+  }
+  
+  // Earliest Surveyor (K) - auto adjusted to be narrower
+  // Header: "Earliest Surveyor" (17ch)
+  // Two-line split: "Earliest" (8ch) / "Surveyor" (8ch)
+  if (colIndex === 10) {
+    return { 
+      width: 'calc(12ch + 1.5rem)', 
+      minWidth: 'calc(10ch + 1.5rem)', 
+      maxWidth: 'calc(14ch + 1.5rem)',
+      boxSizing: 'border-box' as const
+    };
+  }
+  
+  // Latest Surveyor (L) - auto adjusted to be narrower
+  // Header: "Latest Surveyor" (15ch)
+  // Two-line split: "Latest" (6ch) / "Surveyor" (8ch)
+  if (colIndex === 11) {
+    return { 
+      width: 'calc(12ch + 1.5rem)', 
+      minWidth: 'calc(10ch + 1.5rem)', 
+      maxWidth: 'calc(14ch + 1.5rem)',
+      boxSizing: 'border-box' as const
+    };
+  }
+  
+  return undefined;
+};
+
 export default function App() {
   const [sheetUrl, setSheetUrl] = useState<string>(() => {
     const saved = localStorage.getItem('sheet_reporter_url');
@@ -876,8 +1077,43 @@ export default function App() {
     const saved = localStorage.getItem('agt_audio_enabled');
     return saved === 'true'; // Default to false (muted) unless explicitly saved as 'true'
   });
+  const [customReportToggles, setCustomReportToggles] = useState<{ [key: number]: boolean }>(() => {
+    const saved = localStorage.getItem('agt_custom_report_toggles');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      1: true,   // B
+      2: true,   // C
+      3: true,   // D
+      4: true,   // E
+      9: true,   // J
+      10: true,  // K
+      11: true,  // L
+      12: true,  // M
+      13: true,  // Summary Notes (N)
+      14: true,  // Location Notes (O)
+      15: true,  // Additional Notes (P)
+      16: true,  // Civilized Notes (Q)
+      18: true,  // Region Age (S)
+      19: true,  // Lowest Known Phantom System (T)
+      20: true,  // Wiki Link (U)
+      21: true,  // External Link (V)
+      22: true,  // W (Video Link)
+      23: true,  // Light Year Estimate (X)
+      31: true,  // Legacy Name (AF)
+      32: true,  // Legacy Wiki Link (AG)
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('agt_custom_report_toggles', JSON.stringify(customReportToggles));
+  }, [customReportToggles]);
   
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [pdfErrorMsg, setPdfErrorMsg] = useState<string | null>(null);
 
   // Initial fetch and manual font loading
   useEffect(() => {
@@ -1046,7 +1282,7 @@ export default function App() {
     };
   }, []);
 
-  const [reportType, setReportType] = useState<'Simple' | 'Detailed'>('Simple');
+  const [reportType, setReportType] = useState<'Simple' | 'Detailed' | 'Custom'>('Simple');
   const [data, setData] = useState<any[]>([]);
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1222,13 +1458,15 @@ export default function App() {
     }
   };
 
-  // Process rows whenever report type or raw rows change
+  // Process rows whenever report type, customReportToggles or raw rows change
   useEffect(() => {
     if (allRawRows.length >= 2) {
       const headers = allRawRows[1];
       const targetIndexes = reportType === 'Simple'
         ? [0, 1, 2, 3, 9, 10, 20] // A, B, C, D, J, K, U
-        : [0, 1, 2, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 31, 32]; // A, B, C, D, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, AF, AG
+        : reportType === 'Detailed'
+        ? [0, 1, 2, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 31, 32] // A, B, C, D, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, AF, AG
+        : [0, ...[1, 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 31, 32].filter(idx => customReportToggles[idx])]; // Custom report: A (0) is always first, plus active toggles
 
       const filteredColumns = targetIndexes.map(idx => {
         let baseName = headers[idx] || `Col ${String.fromCharCode(65 + idx)}`;
@@ -1263,7 +1501,7 @@ export default function App() {
         findRecord(processedData, filteredColumns, searchKey, selectedGalaxy);
       }
     }
-  }, [reportType, allRawRows]);
+  }, [reportType, customReportToggles, allRawRows]);
 
   const handleSearch = () => {
     setIsExtracting(true);
@@ -1329,8 +1567,45 @@ export default function App() {
   };
 
   const downloadFullReportPdf = async () => {
-    if (reportType !== 'Simple') return;
     if (matchedRecords.length === 0) return;
+
+    if (reportType === 'Custom') {
+      const getRequiredColWidth = (colIdx: number): number => {
+        if (colIdx === 0) return 33; // Region Name
+        if (colIdx === 1) return 18; // Galaxy (B) - auto adjusted narrower
+        if (colIdx === 2) return 22; // Civilized (C)
+        if (colIdx === 3) return 31; // Coordinates (D)
+        if (colIdx === 4) return 14; // Quadrant (E)
+        if (colIdx === 9) return 14; // Game Release (J)
+        if (colIdx === 10) return 12; // Earliest Surveyor (K) - auto adjusted narrower
+        if (colIdx === 11) return 12; // Latest Surveyor (L) - auto adjusted narrower
+        if (colIdx === 12) return 12; // Latest Survey (M) - auto adjusted narrower
+        if (colIdx === 13) return 26; // Summary Notes (N)
+        if (colIdx === 14) return 26; // Location Notes (O)
+        if (colIdx === 15) return 26; // Additional Notes (P)
+        if (colIdx === 16) return 26; // Civilized Notes (Q)
+        if (colIdx === 18) return 9;  // Region Age (S) - never more than 4 chars
+        if (colIdx === 19) return 8;  // Lowest Known Phantom System (T) - never more than 3 chars
+        if (colIdx === 20) return 10; // Wiki Link (U)
+        if (colIdx === 21) return 10; // External Link (V)
+        if (colIdx === 22) return 10; // Video Link (W)
+        if (colIdx === 23) return 10; // Light Year Estimate (X) - never more than 9 chars
+        if (colIdx === 31) return 22; // Legacy Name (AF)
+        if (colIdx === 32) return 10; // Legacy Wiki Link (AG)
+        return 14; // default safety width
+      };
+
+      const enabledCols = columns.filter(col => col.enabled);
+      let totalWidth = 0;
+      enabledCols.forEach(col => {
+        totalWidth += getRequiredColWidth(col.colIndex ?? -1);
+      });
+
+      if (totalWidth > 257) {
+        setPdfErrorMsg("Too many columns, reduce columns or use Export CSV");
+        return; // Abort the PDF Export process
+      }
+    }
 
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape layout (297mm x 210mm)
     const galaxyFilterVal = selectedGalaxy || 'All';
@@ -1427,6 +1702,35 @@ export default function App() {
     // Records page moves to the next page, which will count as Page 1
     doc.addPage();
 
+    // Dynamically adjust font size based on the number of non-zero active columns
+    const enabledCols = columns.filter(col => col.enabled);
+    const numCols = enabledCols.length;
+    let baseFontSize = 8;
+    if (numCols > 16) {
+      baseFontSize = 5.5;
+    } else if (numCols > 12) {
+      baseFontSize = 6.5;
+    } else if (numCols > 8) {
+      baseFontSize = 7.5;
+    }
+
+    const truncateToThreeLinesInPDF = (text: string, colWidth: number, docInstance: jsPDF): string => {
+      if (!text || text.trim() === '') return '-';
+      const lines = docInstance.splitTextToSize(text, colWidth);
+      if (lines.length > 3) {
+        const truncatedLines = lines.slice(0, 3);
+        let lastLine = truncatedLines[2] || '';
+        if (lastLine.length > 3) {
+          lastLine = lastLine.substring(0, lastLine.length - 3) + '...';
+        } else {
+          lastLine = lastLine + '...';
+        }
+        truncatedLines[2] = lastLine;
+        return truncatedLines.join('\n');
+      }
+      return lines.join('\n');
+    };
+
     const tableHeaders = columns.filter(col => col.enabled).map(col => col.name);
     const tableData = matchedRecords.map(record => 
       columns.filter(col => col.enabled).map(col => {
@@ -1434,6 +1738,11 @@ export default function App() {
         if (col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32) {
           const isValid = typeof val === 'string' && val.trim().length > 0;
           return isValid ? 'LINK' : '-';
+        }
+        if (col.colIndex === 13 || col.colIndex === 14 || col.colIndex === 15 || col.colIndex === 16) {
+          if (typeof val === 'string' && val.trim().length > 0) {
+            return truncateToThreeLinesInPDF(val, 24, doc);
+          }
         }
         return record[col.name] || '-';
       })
@@ -1450,8 +1759,52 @@ export default function App() {
 
     const colStyles: { [key: number]: any } = {};
     columns.filter(col => col.enabled).forEach((col, idx) => {
-      if (col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32) {
-        colStyles[idx] = { cellWidth: 14 }; // Comfortable width for "LINK" (4 characters) plus padding
+      const colIdx = col.colIndex ?? -1;
+      if (colIdx === 20 || colIdx === 21 || colIdx === 22 || colIdx === 32) {
+        // Narrow fixed size for "LINK" columns (U, V, W, AG)
+        colStyles[idx] = { cellWidth: 10, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 3) {
+        // Coordinates: perfectly 31mm width, no wrapping, minimal padding to prevent linesplit/truncation
+        colStyles[idx] = { cellWidth: 31, noWrap: true, cellPadding: { left: 0.5, right: 0.5, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 0) {
+        // Region name: standard wrap width up to two lines
+        colStyles[idx] = { cellWidth: 33, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 13 || colIdx === 14 || colIdx === 15 || colIdx === 16) {
+        // Notes columns (N, O, P, Q) pre-truncated
+        colStyles[idx] = { cellWidth: 26, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 1) {
+        // Galaxy (B) - auto adjusted narrower
+        colStyles[idx] = { cellWidth: 18, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 10) {
+        // Earliest Surveyor (K) - auto adjusted narrower
+        colStyles[idx] = { cellWidth: 12, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 11) {
+        // Latest Surveyor (L) - auto adjusted narrower
+        colStyles[idx] = { cellWidth: 12, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 12) {
+        // Latest Survey (M) - auto adjusted narrower
+        colStyles[idx] = { cellWidth: 12, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 18) {
+        // Region Age (S) - max 4 chars (approx 9mm width)
+        colStyles[idx] = { cellWidth: 9, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 19) {
+        // Lowest Known Phantom System (T) - max 3 chars (approx 8mm width)
+        colStyles[idx] = { cellWidth: 8, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (colIdx === 23) {
+        // Light Year Estimate (X) - max 9 chars (approx 10mm width)
+        colStyles[idx] = { cellWidth: 10, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+      } else if (reportType === 'Custom') {
+        if (colIdx === 2 || colIdx === 31) {
+          colStyles[idx] = { cellWidth: 22, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+        } else {
+          colStyles[idx] = { cellWidth: 14, cellPadding: { left: 1, right: 1, top: 1.5, bottom: 1.5 } };
+        }
+      } else if (numCols > 12) {
+        if (colIdx === 2 || colIdx === 31) {
+          colStyles[idx] = { cellWidth: 22 };
+        } else {
+          colStyles[idx] = { cellWidth: 14 };
+        }
       }
     });
 
@@ -1460,8 +1813,8 @@ export default function App() {
       head: [tableHeaders],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [42, 42, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
-      bodyStyles: { fontSize: 8, textColor: [30, 30, 30] },
+      headStyles: { fillColor: [42, 42, 42], textColor: [255, 255, 255], fontSize: baseFontSize, fontStyle: 'bold' },
+      bodyStyles: { fontSize: baseFontSize, textColor: [30, 30, 30] },
       columnStyles: colStyles,
       margin: { top: 30, left: 20, right: 20 },
       didDrawPage: (data) => {
@@ -1638,6 +1991,17 @@ export default function App() {
                 {loading ? t('SYNCING') : sheetUrl ? t('CONNECTED') : t('DISCONNECTED')}
               </span>
             </div>
+            {/* Pulsing dot when status text is not displayed */}
+            <div className="md:hidden flex items-center justify-center w-4 h-4 relative">
+              <span className={`w-2.5 h-2.5 rounded-full animate-ping absolute shrink-0 ${
+                loading ? 'bg-yellow-500' : sheetUrl ? 'bg-emerald-500' : 'bg-red-500'
+              }`} />
+              <span className={`w-2.5 h-2.5 rounded-full relative shrink-0 ${
+                loading ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.7)]' : 
+                sheetUrl ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]' : 
+                'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.7)]'
+              }`} />
+            </div>
             <button 
               onClick={() => setShowSettings(!showSettings)}
               className="p-2 hover:bg-[#FF0500]/10 rounded-lg transition-colors relative group cursor-pointer"
@@ -1678,7 +2042,7 @@ export default function App() {
               
               {/* Report Format Toggle Switch */}
               <div className="flex justify-center">
-                <div className="inline-flex p-1 bg-[#161616] border-2 border-[#FF0500] rounded-full">
+                <div className="inline-flex p-1 bg-[#161616] border-2 border-[#FF0500] rounded-full flex-wrap sm:flex-nowrap justify-center gap-1 sm:gap-0">
                   <button
                     onClick={() => setReportType('Simple')}
                     className={`px-5 py-2 text-[10px] uppercase font-black tracking-widest rounded-full transition-all cursor-pointer ${
@@ -1698,6 +2062,16 @@ export default function App() {
                     }`}
                   >
                     {t("Detailed Report")}
+                  </button>
+                  <button
+                    onClick={() => setReportType('Custom')}
+                    className={`px-5 py-2 text-[10px] uppercase font-black tracking-widest rounded-full transition-all cursor-pointer ${
+                      reportType === 'Custom'
+                        ? 'bg-[#FF0500] text-white shadow-lg shadow-[#FF0500]/25'
+                        : 'text-[#FFB451]/55 hover:text-[#FFB451]'
+                    }`}
+                  >
+                    {t("Custom Report")}
                   </button>
                 </div>
               </div>
@@ -1985,6 +2359,41 @@ export default function App() {
 
           <div className="space-y-12">
             
+          {/* PDF Error Modal Overlay - alert if column widths exceed limits */}
+          <AnimatePresence>
+            {pdfErrorMsg && (
+              <div 
+                className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] flex items-center justify-center p-4 pointer-events-auto"
+                onClick={() => setPdfErrorMsg(null)}
+              >
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0, y: 15 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 15 }}
+                  transition={{ type: "spring", duration: 0.4 }}
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-sm w-full p-6 shadow-2xl flex flex-col items-center text-center space-y-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="w-12 h-12 rounded-full border-2 border-[#FF0500] flex items-center justify-center bg-[#FF0500]/10 text-[#FF0500]">
+                    <AlertCircle className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451]">{t("Limit Exceeded")}</h3>
+                  <p className="text-xs text-[#FFB451]/80 leading-relaxed font-mono">
+                    {pdfErrorMsg}
+                  </p>
+                  <div className="pt-4 w-full">
+                    <button 
+                      onClick={() => setPdfErrorMsg(null)}
+                      className="w-full px-5 py-3 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                    >
+                      {t("Close")}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
           {/* Settings Overlay - Pop Up Box on top of the main display */}
           <AnimatePresence>
             {showSettings && (
@@ -2082,13 +2491,73 @@ export default function App() {
                             <option value="es" className="bg-[#161616] text-[#FFB451]">Español (ES)</option>
                             <option value="de" className="bg-[#161616] text-[#FFB451]">Deutsch (DE)</option>
                             <option value="pt" className="bg-[#161616] text-[#FFB451]">Português (PT)</option>
+                            <option value="it" className="bg-[#161616] text-[#FFB451]">Italiano (IT)</option>
                             <option value="th" className="bg-[#161616] text-[#FFB451]">ไทย (TH)</option>
                             <option value="hi" className="bg-[#161616] text-[#FFB451]">हिन्दी (HI)</option>
                             <option value="ja" className="bg-[#161616] text-[#FFB451]">日本語 (JA)</option>
                             <option value="zh" className="bg-[#161616] text-[#FFB451]">中文 (ZH)</option>
-                            <option value="it" className="bg-[#161616] text-[#FFB451]">Italiano (IT)</option>
                           </select>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Custom Report Toggles Section */}
+                    <div className="col-span-1 md:col-span-2 space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#FF0500]/25 pb-3">
+                        <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
+                          <Sliders className="w-3 h-3 text-[#FFB451]" />
+                          {t("Custom Report Toggles")}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              const updated: { [key: number]: boolean } = {};
+                              AVAILABLE_CUSTOM_TOGGLES.forEach(t => {
+                                updated[t.idx] = true;
+                              });
+                              setCustomReportToggles(updated);
+                            }}
+                            className="px-2.5 py-1.5 border border-[#FF0500] bg-[#FF0500]/10 hover:bg-[#FF0500]/20 text-[#FFB451] hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
+                          >
+                            {t("Select All")}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const updated: { [key: number]: boolean } = {};
+                              AVAILABLE_CUSTOM_TOGGLES.forEach(t => {
+                                updated[t.idx] = false;
+                              });
+                              setCustomReportToggles(updated);
+                            }}
+                            className="px-2.5 py-1.5 border border-[#FFB451]/20 bg-transparent hover:bg-white/[0.05] text-[#FFB451]/70 hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
+                          >
+                            {t("Unselect All")}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-left">
+                        {AVAILABLE_CUSTOM_TOGGLES.map((toggle) => {
+                          const isActive = !!customReportToggles[toggle.idx];
+                          return (
+                            <button
+                              key={toggle.idx}
+                              onClick={() => {
+                                setCustomReportToggles(prev => ({
+                                  ...prev,
+                                  [toggle.idx]: !prev[toggle.idx]
+                                }));
+                              }}
+                              className={`flex items-center gap-2.5 p-2.5 rounded-lg border-2 text-[10px] font-mono font-bold tracking-tight text-left cursor-pointer transition-all ${
+                                isActive 
+                                  ? 'bg-[#FF0500]/15 border-[#FF0500] text-white shadow-sm'
+                                  : 'bg-transparent border-[#FFB451]/10 text-[#FFB451]/40 hover:border-[#FFB451]/20'
+                              }`}
+                            >
+                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isActive ? 'bg-[#FF0500] animate-pulse shadow-[0_0_5px_#FF0500]' : 'bg-[#FFB451]/30'}`}></span>
+                              <span>{toggle.label}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -2166,7 +2635,16 @@ export default function App() {
                             className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                           >
                             <FileText className="w-3.5 h-3.5" />
-                            <span>{t("Export PDF")}</span>
+                            <span>{t("PDF Export")}</span>
+                          </button>
+                        )}
+                        {reportType === 'Custom' && (
+                          <button
+                            onClick={downloadFullReportPdf}
+                            className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>{t("PDF Export")}</span>
                           </button>
                         )}
                         <button
@@ -2200,28 +2678,30 @@ export default function App() {
                           <tr className="bg-[#161616] border-b border-[#FF0500]/25 sticky top-0 z-20 shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                             {columns.filter(col => col.enabled).map((col, idx) => {
                               const isSorted = sortColumn === col.name;
-                              const isNarrowUrlCol = col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32;
-                              const headerStyle = isNarrowUrlCol 
-                                ? { width: 'calc(4ch + 2rem)', minWidth: 'calc(4ch + 2rem)', maxWidth: 'calc(4ch + 2rem)' } 
-                                : undefined;
+                              const isReducedCol = col.colIndex !== undefined && [1, 10, 11, 12, 18, 19, 23].includes(col.colIndex);
+                              const headerStyle = getColumnStyle(col.colIndex);
                               return (
                                 <th 
                                   key={idx} 
                                   onClick={() => toggleSort(col.name)}
                                   style={headerStyle}
-                                  className="py-3.5 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] whitespace-nowrap cursor-pointer hover:bg-[#FF0500]/10 hover:text-white transition-all group/th overflow-hidden text-ellipsis"
+                                  className={`py-3.5 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] cursor-pointer hover:bg-[#FF0500]/10 hover:text-white transition-all group/th overflow-hidden ${
+                                    isReducedCol ? 'whitespace-normal break-normal' : 'whitespace-nowrap text-ellipsis'
+                                  }`}
                                   title={`${t("Click to sort by")} ${t(col.name)}`}
                                 >
-                                  <div className="flex items-center gap-2 select-none">
-                                    <span>{t(col.name)}</span>
+                                  <div className="flex items-start gap-1 select-none">
+                                    <span className={isReducedCol ? "line-clamp-2 block leading-normal" : "whitespace-nowrap overflow-hidden text-ellipsis"}>
+                                      {t(col.name)}
+                                    </span>
                                     {isSorted ? (
                                       sortDirection === 'asc' ? (
-                                        <ChevronUp className="w-3.5 h-3.5 text-[#FF0500] shrink-0" />
+                                        <ChevronUp className="w-3.5 h-3.5 text-[#FF0500] shrink-0 mt-0.5" />
                                       ) : (
-                                        <ChevronDown className="w-3.5 h-3.5 text-[#FF0500] shrink-0" />
+                                        <ChevronDown className="w-3.5 h-3.5 text-[#FF0500] shrink-0 mt-0.5" />
                                       )
                                     ) : (
-                                      <ArrowUpDown className="w-3 h-3 text-[#FFB451]/30 group-hover/th:text-[#FFB451]/60 shrink-0 transition-colors" />
+                                      <ArrowUpDown className="w-3 h-3 text-[#FFB451]/30 group-hover/th:text-[#FFB451]/60 shrink-0 transition-colors mt-0.5" />
                                     )}
                                   </div>
                                 </th>
@@ -2238,15 +2718,16 @@ export default function App() {
                                 const isLinkCol = isNarrowUrlCol || col.name === 'NMS Wiki Link' || String(col.name).toLowerCase().includes('wiki') || String(col.name).toLowerCase().includes('link');
                                 const isValidUrl = typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'));
                                 
-                                const cellStyle = isNarrowUrlCol 
-                                  ? { width: 'calc(4ch + 2rem)', minWidth: 'calc(4ch + 2rem)', maxWidth: 'calc(4ch + 2rem)' } 
-                                  : undefined;
+                                const cellStyle = getColumnStyle(col.colIndex);
+                                const isReducedCol = col.colIndex !== undefined && [1, 10, 11, 12, 18, 19, 23].includes(col.colIndex);
                                 
                                 return (
                                   <td 
                                     key={cIdx} 
                                     style={cellStyle}
-                                    className="py-1.5 px-4 text-[0.71875rem] leading-none text-[#FFB451] font-mono whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]"
+                                    className={`py-1.5 px-4 text-[0.71875rem] leading-normal text-[#FFB451] font-mono overflow-hidden text-ellipsis max-w-[200px] ${
+                                      isReducedCol ? 'whitespace-normal break-normal' : 'whitespace-nowrap'
+                                    }`}
                                   >
                                     {isNarrowUrlCol && val && (isValidUrl || val.includes('.')) ? (
                                       <a 
@@ -2363,14 +2844,17 @@ export default function App() {
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
                           <div className="relative flex items-center justify-center w-2.5 h-2.5">
-                            <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
+                            <span className={`animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full opacity-75 ${
+                              loading ? 'bg-yellow-500' : sheetUrl ? 'bg-emerald-500' : 'bg-red-500'
+                            }`}></span>
+                            <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
+                              loading ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]' :
+                              sheetUrl ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
+                              'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+                            }`}></span>
                           </div>
                           <span className="text-[9px] uppercase tracking-widest text-[#FFB451] font-bold">{t("Ledger Integrity: Verified")}</span>
                         </div>
-                        <span className="text-[9px] font-mono text-[#FFB451] uppercase tracking-widest hidden md:inline">
-                          {t("Index Reference:")} {Math.random().toString(16).substring(2, 8).toUpperCase()}
-                        </span>
                       </div>
                       <div className="text-[9px] uppercase tracking-[0.2em] font-mono text-[#FFB451]">
                         {t("AGT SECURE ARCHIVE CLIENT")}

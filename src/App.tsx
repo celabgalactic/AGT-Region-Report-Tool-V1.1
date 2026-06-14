@@ -393,16 +393,41 @@ const TRANSLATIONS: TranslationDict = {
     ja: "カスタムレポート",
     zh: "自定义报告"
   },
-  "Custom Report Toggles": {
-    en: "Custom Report Toggles",
-    fr: "Boutons de Rapport Personnalisé",
-    es: "Interruptores de Informe Personalizado",
-    de: "Berichtsspalten anpassen",
-    pt: "Alternadores de Relatório Personalizado",
-    th: "สลับคอลัมน์รายงานที่กำหนดเอง",
-    hi: "कस्टम रिपोर्ट टॉगल",
-    ja: "カスタムレポートの切り替え",
-    zh: "自定义报告切换"
+  "Custom Report Columns": {
+    en: "Custom Report Columns",
+    fr: "Colonnes de Rapport Personnalisé",
+    es: "Columnas de Informe Personalizado",
+    de: "Berichtsspalten Anpassen",
+    pt: "Colunas de Relatório Personalizado",
+    th: "คอลัมน์รายงานที่กำหนดเอง",
+    hi: "कस्टम रिपोर्ट कॉलम",
+    ja: "カスタムレポート列",
+    zh: "自定义报告列",
+    it: "Colonne del Rapporto Personalizzato"
+  },
+  "Collapse": {
+    en: "Collapse",
+    fr: "Réduire",
+    es: "Contraer",
+    de: "Einklappen",
+    pt: "Recolher",
+    th: "ย่อ",
+    hi: "सकुचित करें",
+    ja: "折りたたむ",
+    zh: "折叠",
+    it: "Comprimi"
+  },
+  "Expand": {
+    en: "Expand",
+    fr: "Développer",
+    es: "Expandir",
+    de: "Ausklappen",
+    pt: "Expandir",
+    th: "ขยาย",
+    hi: "विस्तาร करें",
+    ja: "展開する",
+    zh: "展开",
+    it: "Espandi"
   },
   "Select All": {
     en: "Select All",
@@ -975,6 +1000,18 @@ const TRANSLATIONS: TranslationDict = {
     hi: "क्षेत्र रीसेट करें",
     ja: "フィールドをリセット",
     zh: "重置表单"
+  },
+  "Reset": {
+    en: "Reset",
+    fr: "Réinitialiser",
+    es: "Restablecer",
+    de: "Zurücksetzen",
+    pt: "Redefinir",
+    th: "รีเซ็ต",
+    hi: "रीसेट",
+    ja: "リセット",
+    zh: "重置",
+    it: "Ripristina"
   }
 };
 
@@ -1140,6 +1177,18 @@ export const getSecurityLevel = (val: any): number => {
   return 0; // Default is Public
 };
 
+export const getSecurityLevelColor = (level: number): string => {
+  switch (level) {
+    case 1: return "text-[#00F4FF] border-[#00F4FF] bg-[#00F4FF]/10 shadow-[0_0_8px_rgba(0,244,255,0.25)]";
+    case 2: return "text-[#F198E2] border-[#F198E2] bg-[#F198E2]/10 shadow-[0_0_8px_rgba(241,152,226,0.25)]";
+    case 3: return "text-[#FD0303] border-[#FD0303] bg-[#FD0303]/10 shadow-[0_0_8px_rgba(253,3,3,0.25)]";
+    case 4: return "text-[#FF9300] border-[#FF9300] bg-[#FF9300]/10 shadow-[0_0_8px_rgba(255,147,0,0.25)]";
+    case 5: return "text-[#3287F0] border-[#3287F0] bg-[#3287F0]/10 shadow-[0_0_8px_rgba(50,135,240,0.25)]";
+    case 0:
+    default: return "text-[#2AFF00] border-[#2AFF00] bg-[#2AFF00]/10 shadow-[0_0_8px_rgba(42,255,0,0.25)]";
+  }
+};
+
 export const decodeXOR = (encodedText: string): string => {
   const key = 969; 
   let decoded = ""; 
@@ -1268,6 +1317,7 @@ export default function App() {
   const [verifyLoading, setVerifyLoading] = useState<boolean>(false);
   const [isGeneratingFile, setIsGeneratingFile] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [customColumnsExpanded, setCustomColumnsExpanded] = useState<boolean>(false);
   const [verifyValidationError, setVerifyValidationError] = useState<string | null>(null);
   const [popupMsg, setPopupMsg] = useState<React.ReactNode | null>(null);
 
@@ -2366,11 +2416,11 @@ export default function App() {
             </div>
             
             {activeTravellerName && activeTravellerId ? (
-              <div className="border border-green-500 text-green-500 px-3 py-1 bg-green-500/5 rounded-xl text-[11px] font-mono font-bold tracking-wider">
+              <div className={`border px-3 py-1 rounded-xl text-[11px] font-mono font-bold tracking-wider ${getSecurityLevelColor(activeSecurityLevel)}`}>
                 {activeTravellerName.substring(0, 20)}
               </div>
             ) : (
-              <div className="border border-[#FF0500] text-[#FF0500] px-3 py-1 bg-[#FF0500]/5 rounded-xl text-[11px] font-mono font-bold tracking-wider font-semibold">
+              <div className={`border px-3 py-1 rounded-xl text-[11px] font-mono font-bold tracking-wider font-semibold ${getSecurityLevelColor(0)}`}>
                 {t("Public User")}
               </div>
             )}
@@ -2952,64 +3002,99 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Custom Report Toggles Section */}
-                    <div className="col-span-1 md:col-span-2 space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#FF0500]/25 pb-3">
-                        <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
-                          <Sliders className="w-3 h-3 text-[#FFB451]" />
-                          {t("Custom Report Toggles")}
+                    {/* Custom Report Columns Section */}
+                    <div className="col-span-1 md:col-span-2 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30 relative overflow-hidden transition-all duration-300">
+                      <div 
+                        onClick={() => setCustomColumnsExpanded(!customColumnsExpanded)}
+                        className="flex items-center justify-between gap-3 cursor-pointer select-none group"
+                      >
+                        <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2 group-hover:text-white transition-colors">
+                          <Sliders className="w-3 h-3 text-[#FFB451] group-hover:text-white transition-colors" />
+                          {t("Custom Report Columns")}
                         </h3>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              const updated: { [key: number]: boolean } = {};
-                              AVAILABLE_CUSTOM_TOGGLES.forEach(t => {
-                                updated[t.idx] = true;
-                              });
-                              setCustomReportToggles(updated);
-                            }}
-                            className="px-2.5 py-1.5 border border-[#FF0500] bg-[#FF0500]/10 hover:bg-[#FF0500]/20 text-[#FFB451] hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
+                        <div className="flex items-center gap-2 text-[#FFB451]/60 group-hover:text-white transition-colors">
+                          <span className="text-[8px] font-mono tracking-wider uppercase font-bold">
+                            {customColumnsExpanded ? t("Collapse") : t("Expand")}
+                          </span>
+                          <motion.span
+                            animate={{ rotate: customColumnsExpanded ? 180 : 0 }}
+                            transition={{ duration: 0.3 }}
                           >
-                            {t("Select All")}
-                          </button>
-                          <button
-                            onClick={() => {
-                              const updated: { [key: number]: boolean } = {};
-                              AVAILABLE_CUSTOM_TOGGLES.forEach(t => {
-                                updated[t.idx] = false;
-                              });
-                              setCustomReportToggles(updated);
-                            }}
-                            className="px-2.5 py-1.5 border border-[#FFB451]/20 bg-transparent hover:bg-white/[0.05] text-[#FFB451]/70 hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
-                          >
-                            {t("Unselect All")}
-                          </button>
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </motion.span>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-left">
-                        {AVAILABLE_CUSTOM_TOGGLES.map((toggle) => {
-                          const isActive = !!customReportToggles[toggle.idx];
-                          return (
-                            <button
-                              key={toggle.idx}
-                              onClick={() => {
-                                setCustomReportToggles(prev => ({
-                                  ...prev,
-                                  [toggle.idx]: !prev[toggle.idx]
-                                }));
-                              }}
-                              className={`flex items-center gap-2.5 p-2.5 rounded-lg border-2 text-[10px] font-mono font-bold tracking-tight text-left cursor-pointer transition-all ${
-                                isActive 
-                                  ? 'bg-[#FF0500]/15 border-[#FF0500] text-white shadow-sm'
-                                  : 'bg-transparent border-[#FFB451]/10 text-[#FFB451]/40 hover:border-[#FFB451]/20'
-                              }`}
-                            >
-                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isActive ? 'bg-[#FF0500] animate-pulse shadow-[0_0_5px_#FF0500]' : 'bg-[#FFB451]/30'}`}></span>
-                              <span>{toggle.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+
+                      <AnimatePresence initial={false}>
+                        {customColumnsExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                            animate={{ height: "auto", opacity: 1, marginTop: 16 }}
+                            exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                            className="space-y-4 overflow-hidden"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-white/5">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const updated: { [key: number]: boolean } = {};
+                                    AVAILABLE_CUSTOM_TOGGLES.forEach(t => {
+                                      updated[t.idx] = true;
+                                    });
+                                    setCustomReportToggles(updated);
+                                  }}
+                                  className="px-2.5 py-1.5 border border-[#FF0500] bg-[#FF0500]/10 hover:bg-[#FF0500]/20 text-[#FFB451] hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
+                                >
+                                  {t("Select All")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const updated: { [key: number]: boolean } = {};
+                                    AVAILABLE_CUSTOM_TOGGLES.forEach(t => {
+                                      updated[t.idx] = false;
+                                    });
+                                    setCustomReportToggles(updated);
+                                  }}
+                                  className="px-2.5 py-1.5 border border-[#FFB451]/20 bg-transparent hover:bg-white/[0.05] text-[#FFB451]/70 hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
+                                >
+                                  {t("Unselect All")}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-left">
+                              {AVAILABLE_CUSTOM_TOGGLES.map((toggle) => {
+                                const isActive = !!customReportToggles[toggle.idx];
+                                return (
+                                  <button
+                                    key={toggle.idx}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCustomReportToggles(prev => ({
+                                        ...prev,
+                                        [toggle.idx]: !prev[toggle.idx]
+                                      }));
+                                    }}
+                                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border-2 text-[10px] font-mono font-bold tracking-tight text-left cursor-pointer transition-all ${
+                                      isActive 
+                                        ? 'bg-[#FF0500]/15 border-[#FF0500] text-white shadow-sm'
+                                        : 'bg-transparent border-[#FFB451]/10 text-[#FFB451]/40 hover:border-[#FFB451]/20'
+                                    }`}
+                                  >
+                                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isActive ? 'bg-[#FF0500] animate-pulse shadow-[0_0_5px_#FF0500]' : 'bg-[#FFB451]/30'}`}></span>
+                                    <span>{toggle.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
                     {/* Traveller Registration Section */}
@@ -3049,11 +3134,11 @@ export default function App() {
                               maxLength={18}
                               onChange={(e) => {
                                 let val = e.target.value.toUpperCase();
-                                val = val.replace(/[^A-Z0-9-]/g, '');
+                                val = val.replace(/[^A-Z0-9?-]/g, '');
                                 setSettingsTravellerId(val);
                                 setVerifyValidationError(null);
                               }}
-                              placeholder="37411005-HN4T-7407"
+                              placeholder="37120130-????-1234"
                               className="w-full px-4 py-3 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
                             />
                           </div>
@@ -3081,9 +3166,9 @@ export default function App() {
                                 return;
                               }
 
-                              const idPattern = /^[0-9]{8}-[0-9A-Z]{4}-[0-9]{4}$/;
+                              const idPattern = /^[0-9]{8}-[0-9A-Z?]{4}-[0-9]{4}$/;
                               if (!idPattern.test(cleanId)) {
-                                setVerifyValidationError("AGT Traveller ID must match format: ########-????-#### (e.g., 37411005-HN4T-7407)");
+                                setVerifyValidationError("AGT Traveller ID must match format: ########-????-#### (e.g., 37120130-????-1234)");
                                 return;
                               }
 
@@ -3157,7 +3242,7 @@ export default function App() {
 
                               const isDeleted = !getCookie('travellerName') && !getCookie('travellerId');
                               if (isDeleted) {
-                                setPopupMsg("Clearing successful");
+                                setPopupMsg("Reset successful");
                                 setSettingsTravellerName("");
                                 setSettingsTravellerId("");
                                 setActiveTravellerName("");
@@ -3165,25 +3250,31 @@ export default function App() {
                                 setActiveSecurityLevel(0);
                                 setVerifyValidationError(null);
                               } else {
-                                setPopupMsg("Clearing failed");
+                                setPopupMsg("Reset failed");
                               }
                             }}
                             className="w-full py-3 bg-transparent border-2 border-[#FFB451]/20 hover:border-[#FFB451]/40 text-[#FFB451] rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center justify-center gap-2"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
-                            <span>{t("Clear Credentials")}</span>
+                            <span>{t("Reset")}</span>
                           </button>
                         </div>
 
                         {activeTravellerName && (
                           <div className="text-[10px] font-mono text-[#FFB451]/60 pt-1.5 border-t border-white/5 flex flex-wrap items-center justify-between gap-2">
                             <span>{t("Verified User")}: <strong className="text-white">{activeTravellerName}</strong></span>
-                            <span>{t("Clearance")}: <strong className="text-green-400 uppercase">
-                              {activeSecurityLevel === 5 ? "SCC Restricted (5)" :
-                               activeSecurityLevel === 4 ? "SLT Restricted (4)" :
-                               activeSecurityLevel === 3 ? "Top Secret (3)" :
-                               activeSecurityLevel === 2 ? "Restricted (2)" :
-                               activeSecurityLevel === 1 ? "Private (1)" : "Public (0)"}
+                            <span>{t("Clearance")}: <strong className={`uppercase ${
+                              activeSecurityLevel === 5 ? "text-[#3287F0]" :
+                              activeSecurityLevel === 4 ? "text-[#FF9300]" :
+                              activeSecurityLevel === 3 ? "text-[#FD0303]" :
+                              activeSecurityLevel === 2 ? "text-[#F198E2]" :
+                              activeSecurityLevel === 1 ? "text-[#00F4FF]" : "text-[#2AFF00]"
+                            }`}>
+                              {activeSecurityLevel === 5 ? "SCC Restricted" :
+                               activeSecurityLevel === 4 ? "SLT Restricted" :
+                               activeSecurityLevel === 3 ? "Top Secret" :
+                               activeSecurityLevel === 2 ? "Restricted Record" :
+                               activeSecurityLevel === 1 ? "Private Record" : "Public Record"}
                             </strong></span>
                           </div>
                         )}

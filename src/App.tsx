@@ -1012,6 +1012,78 @@ const TRANSLATIONS: TranslationDict = {
     ja: "リセット",
     zh: "重置",
     it: "Ripristina"
+  },
+  "Priority": {
+    en: "Priority",
+    fr: "Priorité",
+    es: "Prioridad",
+    de: "Priorität",
+    pt: "Prioridade",
+    th: "ลำดับความสำคัญ",
+    hi: "प्राथमिकता",
+    ja: "優先度",
+    zh: "优先级",
+    it: "Priorità"
+  },
+  "All Priorities": {
+    en: "All Priorities",
+    fr: "Toutes les priorités",
+    es: "Todas las prioridades",
+    de: "Alle Prioritäten",
+    pt: "Todas as prioridades",
+    th: "ลำดับความสำคัญทั้งหมด",
+    hi: "सभी प्राथमिकताएँ",
+    ja: "すべての優先度",
+    zh: "所有优先级",
+    it: "Tutte le priorità"
+  },
+  "Priority No": {
+    en: "No",
+    fr: "Non",
+    es: "No",
+    de: "Nein",
+    pt: "Não",
+    th: "ไม่",
+    hi: "नहीं",
+    ja: "なし",
+    zh: "无",
+    it: "No"
+  },
+  "Priority Low": {
+    en: "Low",
+    fr: "Basse",
+    es: "Baja",
+    de: "Niedrig",
+    pt: "Baixa",
+    th: "ต่ำ",
+    hi: "कम",
+    ja: "低",
+    zh: "低",
+    it: "Bassa"
+  },
+  "Priority Medium": {
+    en: "Medium",
+    fr: "Moyenne",
+    es: "Media",
+    de: "Mittel",
+    pt: "Média",
+    th: "ปานกลาง",
+    hi: "मध्यम",
+    ja: "中",
+    zh: "中",
+    it: "Media"
+  },
+  "Priority High": {
+    en: "High",
+    fr: "Haute",
+    es: "Alta",
+    de: "Hoch",
+    pt: "Alta",
+    th: "สูง",
+    hi: "उच्च",
+    ja: "高",
+    zh: "高",
+    it: "Alta"
   }
 };
 
@@ -1042,11 +1114,22 @@ const AVAILABLE_CUSTOM_TOGGLES = [
   { idx: 22, letter: 'W', label: 'Video Link' },
   { idx: 23, letter: 'X', label: 'Light Year Estimate' },
   { idx: 31, letter: 'AF', label: 'Legacy Name' },
-  { idx: 32, letter: 'AG', label: 'Legacy Wiki Link' }
+  { idx: 32, letter: 'AG', label: 'Legacy Wiki Link' },
+  { idx: 42, letter: 'AQ', label: 'Priority' }
 ];
 
 const getColumnStyle = (colIndex: number | undefined) => {
   if (colIndex === undefined) return undefined;
+
+  // Priority (AQ) Style
+  if (colIndex === 42) {
+    return {
+      width: 'calc(10ch + 1.5rem)',
+      minWidth: 'calc(8ch + 1.5rem)',
+      maxWidth: 'calc(12ch + 1.5rem)',
+      boxSizing: 'border-box' as const
+    };
+  }
   
   // Link / URL columns (U, V, W, AG)
   if (colIndex === 20 || colIndex === 21 || colIndex === 22 || colIndex === 32) {
@@ -1292,6 +1375,7 @@ export default function App() {
       23: true,  // Light Year Estimate (X)
       31: true,  // Legacy Name (AF)
       32: true,  // Legacy Wiki Link (AG)
+      42: true,  // Priority (AQ)
     };
   });
 
@@ -1412,6 +1496,8 @@ export default function App() {
   const [isGalaxyDropdownOpen, setIsGalaxyDropdownOpen] = useState(false);
   const [activeGalaxyIndex, setActiveGalaxyIndex] = useState(0);
   const autocompleteRef = useRef<HTMLDivElement>(null);
+
+  const [selectedPriority, setSelectedPriority] = useState('All');
 
   const [allRawRows, setAllRawRows] = useState<string[][]>([]);
 
@@ -1677,12 +1763,13 @@ export default function App() {
         ? [0, 1, 2, 3, 9, 10, 20] // A, B, C, D, J, K, U
         : reportType === 'Detailed'
         ? [0, 1, 2, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 31, 32] // A, B, C, D, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, AF, AG
-        : [0, ...[1, 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 31, 32].filter(idx => customReportToggles[idx])]; // Custom report: A (0) is always first, plus active toggles
+        : [0, ...[1, 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 31, 32, 42].filter(idx => customReportToggles[idx])]; // Custom report: A (0) is always first, plus active toggles
 
       const filteredColumns = targetIndexes.map(idx => {
         let baseName = headers[idx] || `Col ${String.fromCharCode(65 + idx)}`;
         if (idx === 31) baseName = headers[31] || "AF";
         if (idx === 32) baseName = headers[32] || "AG";
+        if (idx === 42) baseName = headers[42] || "AQ";
         return {
           name: baseName,
           enabled: true,
@@ -1705,14 +1792,16 @@ export default function App() {
           });
           // Store security classification from Column AE (index 30)
           rowObj._securityClass = row[30] || '';
+          // Store priority classification from Column AQ (index 42)
+          rowObj._priority = row[42] || '';
           return rowObj;
         });
 
       setData(processedData);
 
-      findRecord(processedData, filteredColumns, searchKey, selectedGalaxy);
+      findRecord(processedData, filteredColumns, searchKey, selectedGalaxy, selectedPriority);
     }
-  }, [reportType, customReportToggles, allRawRows, activeTravellerName, activeTravellerId, activeSecurityLevel, omitPublicRecords, omitPrivateRecords, searchKey, selectedGalaxy]);
+  }, [reportType, customReportToggles, allRawRows, activeTravellerName, activeTravellerId, activeSecurityLevel, omitPublicRecords, omitPrivateRecords, searchKey, selectedGalaxy, selectedPriority]);
 
   const handleSearch = () => {
     setIsExtracting(true);
@@ -1726,9 +1815,10 @@ export default function App() {
     }, 1500);
   };
 
-  const findRecord = (sourceData: any[], sourceCols: ColumnConfig[], civTerm?: string, galTerm?: string) => {
+  const findRecord = (sourceData: any[], sourceCols: ColumnConfig[], civTerm?: string, galTerm?: string, priorityTerm?: string) => {
     let currentCivTerm = (civTerm ?? searchKey).trim().toLowerCase();
     let currentGalTerm = (galTerm ?? selectedGalaxy).trim().toLowerCase();
+    let currentPriorityTerm = (priorityTerm ?? selectedPriority).trim().toLowerCase();
     
     // Treat AGT as Alliance of Galactic Travellers
     if (currentCivTerm === 'agt') {
@@ -1753,7 +1843,19 @@ export default function App() {
       // IF the user types ALL or leaves blank then this field will match on anything including blank contents in the galaxy field
       const galMatch = currentGalTerm === 'all' || !currentGalTerm ||
                       String(row[galaxyFieldName] || '').toLowerCase().includes(currentGalTerm);
-      return civMatch && galMatch;
+      
+      // Criteria filter for "Priority". Choices: "No", "Low", "Medium", "High". "None" (i.e. 'No') matches empty or "No"
+      let priorityMatch = true;
+      if (currentPriorityTerm && currentPriorityTerm !== 'all') {
+        const rowVal = String(row._priority || '').trim().toLowerCase();
+        if (currentPriorityTerm === 'no') {
+          priorityMatch = rowVal === '' || rowVal === 'no' || rowVal === 'none' || rowVal === 'false';
+        } else {
+          priorityMatch = rowVal === currentPriorityTerm;
+        }
+      }
+
+      return civMatch && galMatch && priorityMatch;
     });
 
     const hasCookieCreds = !!(activeTravellerName && activeTravellerId);
@@ -2500,7 +2602,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Civilization Autocomplete Input with label over it */}
               <div className="flex flex-col space-y-2">
                 <label className="text-[#FFB451] text-[10px] font-mono font-bold tracking-widest uppercase block text-left">
@@ -2775,6 +2877,39 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {/* Priority Dropdown/Select with label over it */}
+            <div className="flex flex-col space-y-2">
+              <label className="text-[#FFB451] text-[10px] font-mono font-bold tracking-widest uppercase block text-left">
+                {t("Priority")}
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-[#FFB451] z-10">
+                  <Sliders className="h-5 w-5" />
+                </div>
+                <select
+                  value={selectedPriority}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedPriority(val);
+                    if (data.length) {
+                      findRecord(data, columns, searchKey, selectedGalaxy, val);
+                    }
+                  }}
+                  className="block w-full pl-14 pr-12 py-5 bg-[#2a2a2a] border-2 border-[#FF0500] rounded-full text-lg font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FF0500] focus:border-[#FF0500] transition-all text-[#FFB451] placeholder:text-[#FFB451]/50 shadow-[0_0_25px_rgba(255,5,0,0.25)] focus:shadow-[0_0_35px_rgba(255,5,0,0.55)] appearance-none cursor-pointer"
+                  id="priority-select"
+                >
+                  <option value="All" className="bg-[#1a1a1a] text-[#FFB451]">{t("All Priorities")}</option>
+                  <option value="No" className="bg-[#1a1a1a] text-[#FFB451]">{t("Priority No")}</option>
+                  <option value="Low" className="bg-[#1a1a1a] text-[#FFB451]">{t("Priority Low")}</option>
+                  <option value="Medium" className="bg-[#1a1a1a] text-[#FFB451]">{t("Priority Medium")}</option>
+                  <option value="High" className="bg-[#1a1a1a] text-[#FFB451]">{t("Priority High")}</option>
+                </select>
+                <div className="absolute right-6 inset-y-0 flex items-center pointer-events-none text-[#FFB451] z-10">
+                  <ChevronDown className="w-5 h-5 animate-pulse" />
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -2798,8 +2933,9 @@ export default function App() {
               onClick={() => {
                 setSearchKey('');
                 setSelectedGalaxy('');
+                setSelectedPriority('All');
                 if (data.length) {
-                  findRecord(data, columns, '', '');
+                  findRecord(data, columns, '', '', 'All');
                 }
               }}
               className="px-8 py-5 bg-[#161616] border-2 border-[#FF0500]/40 text-[#FFB451] hover:text-white hover:border-[#FF0500] rounded-full font-black text-xs uppercase tracking-[0.15em] hover:bg-[#FF0500]/15 active:scale-[0.96] transition-all flex items-center gap-2 cursor-pointer shadow-[0_4px_15px_rgba(0,0,0,0.2)]"

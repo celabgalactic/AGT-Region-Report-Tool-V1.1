@@ -25,7 +25,8 @@ import {
   ChevronUp,
   ChevronDown,
   RotateCcw,
-  User
+  User,
+  Heart
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
@@ -206,16 +207,17 @@ const TRANSLATIONS: TranslationDict = {
     ja: "制限超過",
     zh: "超出限制"
   },
-  "PDF Export": {
-    en: "PDF Export",
-    fr: "Exportation PDF",
-    es: "Exportación PDF",
-    de: "PDF-Export",
-    pt: "Exportação PDF",
-    th: "ดาวน์โหลด PDF",
-    hi: "पीडीएफ निर्यात",
-    ja: "PDFエクスポート",
-    zh: "PDF导出"
+  "PDF Report": {
+    en: "PDF Report",
+    fr: "Rapport PDF",
+    es: "Informe PDF",
+    de: "PDF-Bericht",
+    pt: "Relatório PDF",
+    th: "รายงาน PDF",
+    hi: "पीडीएफ रिपोर्ट",
+    ja: "PDFレポート",
+    zh: "PDF报告",
+    it: "Rapporto PDF"
   },
   "Display Settings": {
     en: "Display Settings",
@@ -933,7 +935,8 @@ const TRANSLATIONS: TranslationDict = {
     th: "สนับสนุน",
     hi: "योगदान दें",
     ja: "貢献",
-    zh: "贡献"
+    zh: "贡献",
+    it: "Contribuire"
   },
   "Galactic Archives": {
     en: "Galactic Archives",
@@ -1970,7 +1973,7 @@ export default function App() {
     });
 
     if (recordsToBuild.length === 0) {
-      setPopupMsg("No records match your security clearance for PDF Export.");
+      setPopupMsg("No records match your security clearance for PDF Report.");
       return;
     }
 
@@ -2008,7 +2011,7 @@ export default function App() {
 
       if (totalWidth > 257) {
         setPdfErrorMsg("Too many columns, reduce columns or use Export CSV");
-        return; // Abort the PDF Export process
+        return; // Abort the PDF Report process
       }
     }
 
@@ -2545,7 +2548,19 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-16">
+      <main className="max-w-5xl mx-auto px-6 py-16 relative">
+        {/* Contribute Button - Upper right corner, 50% smaller than PDF Report button */}
+        <div className="absolute top-4 right-6 z-10">
+          <a
+            href="https://www.nms-agt.com/contribute"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 px-3 py-1.5 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[8px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_8px_rgba(255,5,0,0.25)] hover:shadow-[0_0_15px_rgba(255,5,0,0.45)]"
+          >
+            <span>{t("Contribute")}</span>
+          </a>
+        </div>
+
         <div className="flex flex-col gap-16">
           
           {/* Main Search Logic Container - centered aesthetic */}
@@ -3500,7 +3515,7 @@ export default function App() {
                             className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                           >
                             <FileText className="w-3.5 h-3.5" />
-                            <span>{t("PDF Export")}</span>
+                            <span>{t("PDF Report")}</span>
                           </button>
                         )}
                         {reportType === 'Custom' && (
@@ -3509,7 +3524,7 @@ export default function App() {
                             className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                           >
                             <FileText className="w-3.5 h-3.5" />
-                            <span>{t("PDF Export")}</span>
+                            <span>{t("PDF Report")}</span>
                           </button>
                         )}
                         <button

@@ -26,7 +26,8 @@ import {
   ChevronDown,
   RotateCcw,
   User,
-  Heart
+  Heart,
+  Bug
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
@@ -2529,6 +2530,20 @@ export default function App() {
                 {t("Public User")}
               </div>
             )}
+
+            <a 
+              href="https://www.nms-agt.com/support"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1 hover:opacity-80 transition-opacity cursor-pointer flex items-center justify-center"
+              title="Support"
+              id="support-bug-btn"
+            >
+              <Bug 
+                className="w-5 h-5" 
+                style={{ color: '#FF0500' }}
+              />
+            </a>
 
             <button 
               onClick={() => setShowSettings(!showSettings)}

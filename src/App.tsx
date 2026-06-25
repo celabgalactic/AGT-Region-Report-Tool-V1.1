@@ -36,6 +36,74 @@ import { CIVILIZATIONS, GALAXIES } from './constants';
 // @ts-ignore
 import regionsIcon from './regions-icon.png';
 
+const DB_NAME = 'agt_archive_cache';
+const STORE_NAME = 'raw_rows_store';
+const DB_VERSION = 1;
+
+const openCacheDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = () => reject(new Error('Failed to open database cache.'));
+    request.onsuccess = (event) => resolve((event.target as IDBOpenDBRequest).result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+  });
+};
+
+const saveRowsToCache = async (rows: string[][]): Promise<void> => {
+  try {
+    const db = await openCacheDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put(rows, 'allRawRows');
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(new Error('Failed to save rows to IndexedDB.'));
+    });
+  } catch (err) {
+    console.error('IndexedDB save failed:', err);
+  }
+};
+
+const getRowsFromCache = async (): Promise<string[][] | null> => {
+  try {
+    const db = await openCacheDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get('allRawRows');
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(new Error('Failed to retrieve rows from IndexedDB.'));
+    });
+  } catch (err) {
+    console.error('IndexedDB retrieval failed:', err);
+    return null;
+  }
+};
+
+const formatCacheTimestamp = (timestampStr: string | null) => {
+  if (!timestampStr) return null;
+  const date = new Date(timestampStr);
+  if (isNaN(date.getTime())) return null;
+  
+  const day = String(date.getDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[date.getMonth()];
+  const year = date.getFullYear();
+  
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  
+  return {
+    dateStr: `${day}-${month}-${year}`,
+    timeStr: `${hours}:${minutes}`
+  };
+};
+
 // Column configuration mapping
 interface ColumnConfig {
   name: string;
@@ -939,6 +1007,30 @@ const TRANSLATIONS: TranslationDict = {
     zh: "贡献",
     it: "Contribuire"
   },
+  "Cached": {
+    en: "Cached",
+    fr: "Mis en cache",
+    es: "Guardado en caché",
+    de: "Im Cache",
+    pt: "Em cache",
+    th: "แคชไว้",
+    hi: "कैश किया हुआ",
+    ja: "キャッシュ済み",
+    zh: "已缓存",
+    it: "In cache"
+  },
+  "Last Cache": {
+    en: "Last Cache",
+    fr: "Dernier cache",
+    es: "Última caché",
+    de: "Letzter Cache",
+    pt: "Último cache",
+    th: "แคชล่าสุด",
+    hi: "अंतिम कैश",
+    ja: "最終キャッシュ",
+    zh: "上次缓存",
+    it: "Ultima cache"
+  },
   "Galactic Archives": {
     en: "Galactic Archives",
     fr: "Archives Galactiques",
@@ -1409,11 +1501,35 @@ export default function App() {
   const [verifyValidationError, setVerifyValidationError] = useState<string | null>(null);
   const [popupMsg, setPopupMsg] = useState<React.ReactNode | null>(null);
 
+  const [cacheTimestamp, setCacheTimestamp] = useState<string | null>(() => localStorage.getItem('db_cache_timestamp'));
+  const [isUsingCache, setIsUsingCache] = useState<boolean>(false);
+
   // Initial fetch and manual font loading
   useEffect(() => {
-    if (sheetUrl) {
-      fetchData();
-    }
+    const initData = async () => {
+      const storedTimestamp = localStorage.getItem('db_cache_timestamp');
+      if (storedTimestamp && sheetUrl) {
+        setLoading(true);
+        try {
+          const cachedRows = await getRowsFromCache();
+          if (cachedRows && cachedRows.length >= 2) {
+            setAllRawRows(cachedRows);
+            setIsUsingCache(true);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error('Failed to load cache:', err);
+        }
+      }
+      
+      // If no cache or cache failed to load, fetch from network
+      if (sheetUrl) {
+        fetchData();
+      }
+    };
+
+    initData();
 
     // Manual font loading reinforcement with local font
     const font = new FontFace('Geonms', 'url(/NMSFuturaProBook_Kerned.ttf)');
@@ -1733,7 +1849,7 @@ export default function App() {
         header: false,
         skipEmptyLines: true,
         delimiter: fetchUrl.includes('output=tsv') ? '\t' : undefined,
-        complete: (results) => {
+        complete: async (results) => {
           const rawRows = results.data as string[][];
           if (rawRows.length < 2) {
             setError('The source sheet data is insufficient (need at least 2 rows).');
@@ -1743,6 +1859,17 @@ export default function App() {
           }
 
           setAllRawRows(rawRows);
+          
+          try {
+            const now = new Date().toISOString();
+            localStorage.setItem('db_cache_timestamp', now);
+            setCacheTimestamp(now);
+            await saveRowsToCache(rawRows);
+          } catch (err) {
+            console.error('Failed to cache synced database:', err);
+          }
+
+          setIsUsingCache(false);
           setLoading(false);
           setIsSyncing(false);
         },
@@ -2500,22 +2627,41 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="hidden md:block text-[9px] text-[#FFB451] tracking-widest font-mono">
-              {t("STATUS:")} <span className={
-                loading ? 'text-yellow-500' :
-                sheetUrl ? 'text-emerald-500' : 
-                'text-red-500'
-              }>
-                {loading ? t('SYNCING') : sheetUrl ? t('CONNECTED') : t('DISCONNECTED')}
-              </span>
-            </div>
+            {cacheTimestamp && !loading ? (
+              <div className="hidden md:flex flex-col items-end text-right font-mono text-[9px] text-[#FFB451] tracking-widest">
+                <div>
+                  {t("STATUS:")} <span className="text-blue-500 font-bold">{t("Cached")}</span>
+                </div>
+                {(() => {
+                  const formatted = formatCacheTimestamp(cacheTimestamp);
+                  return formatted ? (
+                    <div className="text-[8px] text-blue-400 font-bold tracking-wider mt-0.5 uppercase">
+                      {formatted.dateStr} {formatted.timeStr}
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            ) : (
+              <div className="hidden md:block text-[9px] text-[#FFB451] tracking-widest font-mono">
+                {t("STATUS:")} <span className={
+                  loading ? 'text-yellow-500' :
+                  sheetUrl ? 'text-emerald-500' : 
+                  'text-red-500'
+                }>
+                  {loading ? t('SYNCING') : sheetUrl ? t('CONNECTED') : t('DISCONNECTED')}
+                </span>
+              </div>
+            )}
             {/* Pulsing dot when status text is not displayed */}
             <div className="md:hidden flex items-center justify-center w-4 h-4 relative">
               <span className={`w-2.5 h-2.5 rounded-full animate-ping absolute shrink-0 ${
-                loading ? 'bg-yellow-500' : sheetUrl ? 'bg-emerald-500' : 'bg-red-500'
+                loading ? 'bg-yellow-500' :
+                cacheTimestamp ? 'bg-blue-500' :
+                sheetUrl ? 'bg-emerald-500' : 'bg-red-500'
               }`} />
               <span className={`w-2.5 h-2.5 rounded-full relative shrink-0 ${
                 loading ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.7)]' : 
+                cacheTimestamp ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.7)]' :
                 sheetUrl ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]' : 
                 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.7)]'
               }`} />
@@ -3477,11 +3623,22 @@ export default function App() {
                         </h3>
                         <div className="space-y-4">
                           <button 
-                            onClick={fetchData}
+                            onClick={() => {
+                              setShowSettings(false);
+                              fetchData();
+                            }}
                             className="w-full py-4 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/85 transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                           >
                             {t("Re-Sync Region Data")}
                           </button>
+                          {cacheTimestamp && (() => {
+                            const formatted = formatCacheTimestamp(cacheTimestamp);
+                            return formatted ? (
+                              <div className="text-center text-[10px] text-blue-500 font-mono font-bold tracking-wider mt-2">
+                                {t("Last Cache")}: {formatted.dateStr} {formatted.timeStr}
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -3740,10 +3897,13 @@ export default function App() {
                         <div className="flex items-center gap-2">
                           <div className="relative flex items-center justify-center w-2.5 h-2.5">
                             <span className={`animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full opacity-75 ${
-                              loading ? 'bg-yellow-500' : sheetUrl ? 'bg-emerald-500' : 'bg-red-500'
+                              loading ? 'bg-yellow-500' : 
+                              isUsingCache ? 'bg-blue-500' : 
+                              sheetUrl ? 'bg-emerald-500' : 'bg-red-500'
                             }`}></span>
                             <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
                               loading ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]' :
+                              isUsingCache ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]' :
                               sheetUrl ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
                               'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
                             }`}></span>

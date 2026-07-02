@@ -199,6 +199,54 @@ const TRANSLATIONS: TranslationDict = {
     ja: "AGT リージョンレポートツール",
     zh: "AGT 区域报告工具"
   },
+  "Region Report": {
+    en: "Region Report",
+    fr: "Rapport de Région",
+    es: "Informe de Región",
+    de: "Regionenbericht",
+    pt: "Relatório de Região",
+    th: "รายงานภูมิภาค",
+    hi: "क्षेत्र रिपोर्ट",
+    ja: "リージョンレポート",
+    zh: "区域报告",
+    it: "Rapporto di Regione"
+  },
+  "Total Regions": {
+    en: "Total Regions",
+    fr: "Régions Totales",
+    es: "Regiones Totales",
+    de: "Regionen Gesamt",
+    pt: "Total de Regiões",
+    th: "ภูมิภาคทั้งหมด",
+    hi: "कुल क्षेत्र",
+    ja: "総リージョン数",
+    zh: "总区域数",
+    it: "Regioni Totali"
+  },
+  "Distinct Civilizations": {
+    en: "Distinct Civilizations",
+    fr: "Civilisations Distinctes",
+    es: "Civilizaciones Distintas",
+    de: "Verschiedene Zivilisationen",
+    pt: "Civilizações Distintas",
+    th: "อารยธรรมที่แตกต่าง",
+    hi: "विशिष्ट सभ्यताएँ",
+    ja: "異なる文明数",
+    zh: "独特文明数",
+    it: "Civiltà Distinte"
+  },
+  "Unique Galaxies": {
+    en: "Unique Galaxies",
+    fr: "Galaxies Uniques",
+    es: "Galaxias Únicas",
+    de: "Einzigartige Galaxien",
+    pt: "Galáxias Únicas",
+    th: "กาแล็กซีที่ไม่ซ้ำกัน",
+    hi: "अद्वितीय आकाशगंगाएँ",
+    ja: "ユニークな銀河数",
+    zh: "唯一星系数",
+    it: "Galassie Uniche"
+  },
   "STATUS:": {
     en: "STATUS:",
     fr: "STATUT :",
@@ -1740,6 +1788,25 @@ export default function App() {
     return sortedAndMatchedRecords.slice(start, start + itemsPerPage);
   }, [sortedAndMatchedRecords, currentPage, itemsPerPage]);
 
+  const summaryStats = useMemo(() => {
+    const totalRegions = matchedRecords.length;
+    const civilizations = new Set<string>();
+    const galaxies = new Set<string>();
+
+    matchedRecords.forEach(record => {
+      const civ = String(record._civilization || '').trim();
+      const gal = String(record._galaxy || '').trim();
+      if (civ) civilizations.add(civ);
+      if (gal) galaxies.add(gal);
+    });
+
+    return {
+      totalRegions,
+      distinctCivilizations: civilizations.size,
+      uniqueGalaxies: galaxies.size
+    };
+  }, [matchedRecords]);
+
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [tableScrollWidth, setTableScrollWidth] = useState<number>(0);
@@ -1925,6 +1992,10 @@ export default function App() {
           rowObj._securityClass = row[30] || '';
           // Store priority classification from Column AQ (index 42)
           rowObj._priority = row[42] || '';
+          // Store original fields for reliable dashboard analytics
+          rowObj._region = row[0] || '';
+          rowObj._galaxy = row[1] || '';
+          rowObj._civilization = row[2] || '';
           return rowObj;
         });
 
@@ -2602,6 +2673,26 @@ export default function App() {
             font-size: ${16 * parseFloat(textScale)}px !important;
           }
         }
+        
+        /* Custom scrollbar styling in E25530 theme */
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: #E25530 #111111;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          height: 6px !important;
+          width: 6px !important;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #111111 !important;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #E25530 !important;
+          border-radius: 9999px !important;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #f17858 !important;
+        }
       `}</style>
       {/* Header */}
       <header className="border-b border-agt-orange/5 bg-black/40 backdrop-blur-md sticky top-0 z-50">
@@ -2621,8 +2712,14 @@ export default function App() {
               }}
             />
             <div className="flex flex-col">
-              <h1 className="font-bold text-xs tracking-[0.2em] uppercase text-[#FFB451]">{t("Alliance of Galactic Travellers")}</h1>
-              <span className="text-[9px] text-[#FFB451] uppercase tracking-[0.3em] font-bold">{t("AGT Region Report Tool")}</span>
+              <h1 className="font-bold text-xs tracking-[0.2em] uppercase text-[#FFB451]">
+                <span className="hidden md:inline">{t("Alliance of Galactic Travellers")}</span>
+                <span className="md:hidden">AGT</span>
+              </h1>
+              <span className="text-[9px] text-[#FFB451] uppercase tracking-[0.3em] font-bold">
+                <span className="hidden md:inline">{t("AGT Region Report Tool")}</span>
+                <span className="md:hidden">{t("Region Report")}</span>
+              </span>
             </div>
           </div>
           
@@ -2653,7 +2750,11 @@ export default function App() {
               </div>
             )}
             {/* Pulsing dot when status text is not displayed */}
-            <div className="md:hidden flex items-center justify-center w-4 h-4 relative">
+            <button 
+              onClick={() => setShowSettings(true)}
+              className="md:hidden flex items-center justify-center w-4 h-4 relative cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
+              title="Click to open settings"
+            >
               <span className={`w-2.5 h-2.5 rounded-full animate-ping absolute shrink-0 ${
                 loading ? 'bg-yellow-500' :
                 cacheTimestamp ? 'bg-blue-500' :
@@ -2665,17 +2766,33 @@ export default function App() {
                 sheetUrl ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]' : 
                 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.7)]'
               }`} />
-            </div>
+            </button>
             
-            {activeTravellerName && activeTravellerId ? (
-              <div className={`border px-3 py-1 rounded-xl text-[11px] font-mono font-bold tracking-wider ${getSecurityLevelColor(activeSecurityLevel)}`}>
-                {activeTravellerName.substring(0, 20)}
-              </div>
-            ) : (
-              <div className={`border px-3 py-1 rounded-xl text-[11px] font-mono font-bold tracking-wider font-semibold ${getSecurityLevelColor(0)}`}>
-                {t("Public User")}
-              </div>
-            )}
+            {/* Desktop user identity */}
+            <div className="hidden md:block">
+              {activeTravellerName && activeTravellerId ? (
+                <div className={`border px-3 py-1 rounded-xl text-[11px] font-mono font-bold tracking-wider ${getSecurityLevelColor(activeSecurityLevel)}`}>
+                  {activeTravellerName.substring(0, 20)}
+                </div>
+              ) : (
+                <div className={`border px-3 py-1 rounded-xl text-[11px] font-mono font-bold tracking-wider font-semibold ${getSecurityLevelColor(0)}`}>
+                  {t("Public User")}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile user identity simple box */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className={`md:hidden w-6 h-6 border rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80 transition-all ${
+                activeTravellerName && activeTravellerId 
+                  ? getSecurityLevelColor(activeSecurityLevel) 
+                  : getSecurityLevelColor(0)
+              }`}
+              title={activeTravellerName && activeTravellerId ? `${activeTravellerName} (Click to open Settings)` : "Public User (Click to open Settings)"}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+            </button>
 
             <a 
               href="https://www.nms-agt.com/support"
@@ -2699,7 +2816,7 @@ export default function App() {
             >
               <Settings 
                 className="w-5 h-5 transition-transform duration-700 hover:rotate-360" 
-                style={{ color: '#FF0550' }} 
+                style={{ color: '#FF0500' }} 
               />
               {!sheetUrl && (
                 <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-[#FF0500] rounded-full shadow-[0_0_5px_rgba(255,5,0,0.5)]"></span>
@@ -3225,7 +3342,7 @@ export default function App() {
                   {/* Close button inside modal header */}
                   <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-6">
                     <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
-                      <Settings className="w-5 h-5 text-[#FF0550] animate-spin" style={{ color: '#FF0550' }} />
+                      <Settings className="w-5 h-5 text-[#FF0500] animate-spin" style={{ color: '#FF0500' }} />
                       Control Settings
                     </h3>
                     <button 
@@ -3708,7 +3825,58 @@ export default function App() {
                         </button>
                       </div>
                     </div>
- 
+
+                    {/* Summary Dashboard Component */}
+                    <div className="px-8 pb-6 pt-2 grid grid-cols-1 md:grid-cols-3 gap-4 border-b border-[#FF0500]/20 bg-[#111111]/30">
+                      {/* Card 1: Total Regions */}
+                      <div className="relative overflow-hidden rounded-xl border border-[#FF0500]/20 bg-[#161616]/80 p-5 flex flex-col justify-between group hover:border-[#FF0500]/40 transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-[#FF0500]/5 rounded-full blur-2xl pointer-events-none"></div>
+                        <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-[0.2em] font-mono block mb-1">
+                          {t("Total Regions")}
+                        </span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-black tracking-tight text-[#FFB451] font-mono leading-none">
+                            {summaryStats.totalRegions}
+                          </span>
+                          <span className="text-[10px] text-emerald-500 font-mono">
+                            {t("ACTIVE")}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card 2: Distinct Civilizations */}
+                      <div className="relative overflow-hidden rounded-xl border border-[#FF0500]/20 bg-[#161616]/80 p-5 flex flex-col justify-between group hover:border-[#FF0500]/40 transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                        <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-[0.2em] font-mono block mb-1">
+                          {t("Distinct Civilizations")}
+                        </span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-black tracking-tight text-[#FFB451] font-mono leading-none">
+                            {summaryStats.distinctCivilizations}
+                          </span>
+                          <span className="text-[10px] text-blue-500 font-mono">
+                            {t("MAPPED")}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card 3: Unique Galaxies */}
+                      <div className="relative overflow-hidden rounded-xl border border-[#FF0500]/20 bg-[#161616]/80 p-5 flex flex-col justify-between group hover:border-[#FF0500]/40 transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                        <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-[0.2em] font-mono block mb-1">
+                          {t("Unique Galaxies")}
+                        </span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-black tracking-tight text-[#FFB451] font-mono leading-none">
+                            {summaryStats.uniqueGalaxies}
+                          </span>
+                          <span className="text-[10px] text-purple-500 font-mono">
+                            {t("CHARTED")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Top synchronized horizontal scrollbar when needed */}
                     {isScrollNeeded && (
                       <div 

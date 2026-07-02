@@ -3930,25 +3930,38 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#FF0500]/20">
-                          {paginatedRecords.map((record, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-white/[0.04] transition-colors group">
-                              {columns.filter(col => col.enabled).map((col, cIdx) => {
-                                const val = record[col.name];
-                                const isNarrowUrlCol = col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32;
-                                const isLinkCol = isNarrowUrlCol || col.name === 'NMS Wiki Link' || String(col.name).toLowerCase().includes('wiki') || String(col.name).toLowerCase().includes('link');
-                                const isValidUrl = typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'));
-                                
-                                const cellStyle = getColumnStyle(col.colIndex);
-                                const isReducedCol = col.colIndex !== undefined && [1, 10, 11, 12, 18, 19, 23].includes(col.colIndex);
-                                
-                                return (
-                                  <td 
-                                    key={cIdx} 
-                                    style={cellStyle}
-                                    className={`py-1.5 px-4 text-[0.71875rem] leading-normal text-[#FFB451] font-mono overflow-hidden text-ellipsis max-w-[200px] ${
-                                      isReducedCol ? 'whitespace-normal break-normal' : 'whitespace-nowrap'
-                                    }`}
-                                  >
+                          {paginatedRecords.map((record, rIdx) => {
+                            const isHighPriority = String(record._priority || '').trim().toLowerCase() === 'high';
+                            return (
+                              <tr 
+                                key={rIdx} 
+                                className={`transition-colors group ${
+                                  isHighPriority 
+                                    ? 'bg-[#eab308]/10 hover:bg-[#eab308]/15' 
+                                    : 'hover:bg-white/[0.04]'
+                                }`}
+                              >
+                                {columns.filter(col => col.enabled).map((col, cIdx) => {
+                                  const val = record[col.name];
+                                  const isNarrowUrlCol = col.colIndex === 20 || col.colIndex === 21 || col.colIndex === 22 || col.colIndex === 32;
+                                  const isLinkCol = isNarrowUrlCol || col.name === 'NMS Wiki Link' || String(col.name).toLowerCase().includes('wiki') || String(col.name).toLowerCase().includes('link');
+                                  const isValidUrl = typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'));
+                                  
+                                  const cellStyle = getColumnStyle(col.colIndex);
+                                  const isReducedCol = col.colIndex !== undefined && [1, 10, 11, 12, 18, 19, 23].includes(col.colIndex);
+                                  
+                                  return (
+                                    <td 
+                                      key={cIdx} 
+                                      style={cellStyle}
+                                      className={`py-1.5 px-4 text-[0.71875rem] leading-normal font-mono overflow-hidden text-ellipsis max-w-[200px] ${
+                                        isReducedCol ? 'whitespace-normal break-normal' : 'whitespace-nowrap'
+                                      } ${
+                                        isHighPriority ? 'text-amber-200 font-medium' : 'text-[#FFB451]'
+                                      } ${
+                                        cIdx === 0 && isHighPriority ? 'border-l-4 border-[#eab308]' : ''
+                                      }`}
+                                    >
                                     {isNarrowUrlCol && val && (isValidUrl || val.includes('.')) ? (
                                       <a 
                                         href={isValidUrl ? val : `https://${val}`} 
@@ -3974,7 +3987,8 @@ export default function App() {
                                 );
                               })}
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                         <tfoot className="border-t-2 border-[#FF0500] bg-[#0c0c0c]">
                           <tr>

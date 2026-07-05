@@ -291,16 +291,17 @@ const TRANSLATIONS: TranslationDict = {
     ja: "切断済み",
     zh: "已断开"
   },
-  "Control Settings": {
-    en: "Control Settings",
-    fr: "Paramètres de Contrôle",
-    es: "Ajustes de Control",
-    de: "Steuerungseinstellungen",
-    pt: "Configurações de Controle",
-    th: "การตั้งค่าควบคุม",
-    hi: "नियंत्रण सेटिंग्स",
-    ja: "コントロール設定",
-    zh: "控制设置"
+  "Settings": {
+    en: "Settings",
+    fr: "Paramètres",
+    es: "Ajustes",
+    de: "Einstellungen",
+    pt: "Configurações",
+    th: "การตั้งค่า",
+    hi: "सेटिंग्स",
+    ja: "設定",
+    zh: "设置",
+    it: "Impostazioni"
   },
   "Close": {
     en: "Close",
@@ -379,6 +380,17 @@ const TRANSLATIONS: TranslationDict = {
     hi: "1x (डिफ़ॉल्ट)",
     ja: "1倍 (デフォルト)",
     zh: "1x (默认)"
+  },
+  "1.25x": {
+    en: "1.25x",
+    fr: "1.25x",
+    es: "1.25x",
+    de: "1.25x",
+    pt: "1.25x",
+    th: "1.25 เท่า",
+    hi: "1.25x",
+    ja: "1.25倍",
+    zh: "1.25x"
   },
   "1.5x": {
     en: "1.5x",
@@ -3343,7 +3355,7 @@ export default function App() {
                   <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-6">
                     <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
                       <Settings className="w-5 h-5 text-[#FF0500] animate-spin" style={{ color: '#FF0500' }} />
-                      Control Settings
+                      {t("Settings")}
                     </h3>
                     <button 
                       onClick={() => setShowSettings(false)}
@@ -3389,6 +3401,7 @@ export default function App() {
                             className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
                           >
                             <option value="1" className="bg-[#161616] text-[#FFB451]">{t("1x (Default)")}</option>
+                            <option value="1.25" className="bg-[#161616] text-[#FFB451]">{t("1.25x")}</option>
                             <option value="1.5" className="bg-[#161616] text-[#FFB451]">{t("1.5x")}</option>
                             <option value="2" className="bg-[#161616] text-[#FFB451]">{t("2x")}</option>
                             <option value="2.5" className="bg-[#161616] text-[#FFB451]">{t("2.5x")}</option>

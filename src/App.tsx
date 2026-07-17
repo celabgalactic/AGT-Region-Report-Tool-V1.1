@@ -1395,6 +1395,60 @@ export const getCookie = (name: string): string => {
   return '';
 };
 
+export const encryptValue = (text: string): string => {
+  const key = 969;
+  let result = "";
+  for (let i = 0; i < text.length; i++) {
+    const charCode = text.charCodeAt(i);
+    const encrypted = charCode ^ key;
+    result += String.fromCharCode(encrypted);
+  }
+  return btoa(unescape(encodeURIComponent(result)));
+};
+
+export const decryptValue = (encoded: string): string => {
+  if (!encoded) return "";
+  try {
+    const decodedB64 = decodeURIComponent(escape(atob(encoded)));
+    const key = 969;
+    let result = "";
+    for (let i = 0; i < decodedB64.length; i++) {
+      const charCode = decodedB64.charCodeAt(i);
+      const decrypted = charCode ^ key;
+      result += String.fromCharCode(decrypted);
+    }
+    return result;
+  } catch (e) {
+    return "";
+  }
+};
+
+export interface TravellerSession {
+  travellerName: string;
+  securityLevel: number;
+  password: string;
+}
+
+export const getDecryptedSession = (): TravellerSession | null => {
+  const cookieVal = getCookie('agt_traveller_session');
+  if (!cookieVal) return null;
+  const decrypted = decryptValue(cookieVal);
+  if (!decrypted) return null;
+  try {
+    const parsed = JSON.parse(decrypted);
+    if (parsed && typeof parsed.travellerName === 'string') {
+      return {
+        travellerName: parsed.travellerName || '',
+        securityLevel: Number(parsed.securityLevel) || 0,
+        password: parsed.password || ''
+      };
+    }
+  } catch (e) {
+    console.error("Failed to parse decrypted session cookie:", e);
+  }
+  return null;
+};
+
 export const getSecurityLevel = (val: any): number => {
   if (val === undefined || val === null) return 0;
   const str = String(val).trim().toLowerCase();
@@ -1445,7 +1499,7 @@ export interface VerificationResult {
   error?: string;
 }
 
-export const verifyTravellerCredentials = async (nameInput: string, idInput: string): Promise<VerificationResult> => {
+export const verifyTravellerCredentials = async (nameInput: string, passwordInput: string): Promise<VerificationResult> => {
   try {
     const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOZq3Cl2e0aNqzXdLRe63HuM7PlqGH3HnS_-0x6P_CYnGDJlK5QvI-YjU0lNaOgLyp3uoktS4WIXyK/pub?gid=505079663&single=true&output=tsv";
     const res = await fetch(url);
@@ -1455,7 +1509,7 @@ export const verifyTravellerCredentials = async (nameInput: string, idInput: str
     // Split by lines, then by tabs since it's TSV format
     const rows = tsvText.split(/\r?\n/).map(line => line.split('\t'));
     const cleanName = nameInput.trim();
-    const cleanId = idInput.trim();
+    const cleanPassword = passwordInput.trim();
     
     let matchedRow: string[] | null = null;
     for (const r of rows) {
@@ -1469,13 +1523,15 @@ export const verifyTravellerCredentials = async (nameInput: string, idInput: str
       return { success: false, error: 'mismatch' };
     }
     
-    const encodedB = matchedRow[1] || '';
-    const decodedB = decodeXOR(encodedB).trim();
+    // Column D (index 3) is the password, decrypted using decodeXOR
+    const encodedD = matchedRow[3] || '';
+    const decodedD = decodeXOR(encodedD).trim();
     
-    if (decodedB !== cleanId) {
+    if (decodedD !== cleanPassword) {
       return { success: false, error: 'mismatch' };
     }
     
+    // Column C (index 2) is the security level, which does not need XOR decryption
     const secLevelVal = matchedRow[2]?.trim() || '';
     const numericLevel = getSecurityLevel(secLevelVal);
     
@@ -1543,13 +1599,25 @@ export default function App() {
   const [pdfErrorMsg, setPdfErrorMsg] = useState<string | null>(null);
 
   // Traveller Identity Verification States
-  const [settingsTravellerName, setSettingsTravellerName] = useState<string>(() => getCookie('travellerName') || '');
-  const [settingsTravellerId, setSettingsTravellerId] = useState<string>(() => getCookie('travellerId') || '');
-  const [activeTravellerName, setActiveTravellerName] = useState<string>(() => getCookie('travellerName') || '');
-  const [activeTravellerId, setActiveTravellerId] = useState<string>(() => getCookie('travellerId') || '');
+  const [settingsTravellerName, setSettingsTravellerName] = useState<string>(() => {
+    const session = getDecryptedSession();
+    return session ? session.travellerName : '';
+  });
+  const [settingsTravellerId, setSettingsTravellerId] = useState<string>(() => {
+    const session = getDecryptedSession();
+    return session ? session.password : '';
+  });
+  const [activeTravellerName, setActiveTravellerName] = useState<string>(() => {
+    const session = getDecryptedSession();
+    return session ? session.travellerName : '';
+  });
+  const [activeTravellerId, setActiveTravellerId] = useState<string>(() => {
+    const session = getDecryptedSession();
+    return session ? session.password : '';
+  });
   const [activeSecurityLevel, setActiveSecurityLevel] = useState<number>(() => {
-    const lvl = parseInt(getCookie('securityLevel') || '', 10);
-    return isNaN(lvl) ? 0 : lvl;
+    const session = getDecryptedSession();
+    return session ? session.securityLevel : 0;
   });
   const [omitPublicRecords, setOmitPublicRecords] = useState<boolean>(false);
   const [omitPrivateRecords, setOmitPrivateRecords] = useState<boolean>(false);
@@ -2126,8 +2194,9 @@ export default function App() {
 
   const downloadFullReportPdf = async () => {
     // Check authorization first!
-    const nameCookie = getCookie('travellerName');
-    const idCookie = getCookie('travellerId');
+    const session = getDecryptedSession();
+    const nameCookie = session ? session.travellerName : '';
+    const idCookie = session ? session.password : '';
     const preFilledName = settingsTravellerName.trim();
     const preFilledId = settingsTravellerId.trim();
 
@@ -2141,18 +2210,21 @@ export default function App() {
 
     let userSecLvl = 0;
     if (cookieOk) {
-      const lvl = parseInt(getCookie('securityLevel') || '', 10);
-      userSecLvl = isNaN(lvl) ? 0 : lvl;
+      userSecLvl = session ? session.securityLevel : 0;
     } else if (preFilledOk) {
       setLoading(true);
       const result = await verifyTravellerCredentials(preFilledName, preFilledId);
       setLoading(false);
       if (result.success) {
         userSecLvl = result.securityLevel ?? 0;
-        // Save to cookie since credentials matched successfully
-        document.cookie = `travellerName=${encodeURIComponent(preFilledName)}; path=/; max-age=31536000; SameSite=Lax`;
-        document.cookie = `travellerId=${encodeURIComponent(preFilledId)}; path=/; max-age=31536000; SameSite=Lax`;
-        document.cookie = `securityLevel=${encodeURIComponent(String(userSecLvl))}; path=/; max-age=31536000; SameSite=Lax`;
+        // Save to encrypted cookie since credentials matched successfully
+        const sessionObj = {
+          travellerName: preFilledName,
+          securityLevel: userSecLvl,
+          password: preFilledId
+        };
+        const encryptedSession = encryptValue(JSON.stringify(sessionObj));
+        document.cookie = `agt_traveller_session=${encodeURIComponent(encryptedSession)}; path=/; max-age=31536000; SameSite=Lax`;
         setActiveTravellerName(preFilledName);
         setActiveTravellerId(preFilledId);
         setActiveSecurityLevel(userSecLvl);
@@ -2161,7 +2233,7 @@ export default function App() {
           <div className="space-y-3">
             <div className="text-sm font-bold text-red-500">Verification unsuccessful for pre-filled credentials. Export aborted.</div>
             <div className="text-xs text-[#FFB451]/80 leading-relaxed font-sans mt-1">
-              Traveller Name and ID and does not match, Please consult{" "}
+              Traveller Name and password do not match, Please consult{" "}
               <a 
                 href="https://www.nms-agt.com/support/traveller-id" 
                 target="_blank" 
@@ -2553,8 +2625,9 @@ export default function App() {
 
   const downloadFullReportCsv = async () => {
     // Check authorization first!
-    const nameCookie = getCookie('travellerName');
-    const idCookie = getCookie('travellerId');
+    const session = getDecryptedSession();
+    const nameCookie = session ? session.travellerName : '';
+    const idCookie = session ? session.password : '';
     const preFilledName = settingsTravellerName.trim();
     const preFilledId = settingsTravellerId.trim();
 
@@ -2568,18 +2641,21 @@ export default function App() {
 
     let userSecLvl = 0;
     if (cookieOk) {
-      const lvl = parseInt(getCookie('securityLevel') || '', 10);
-      userSecLvl = isNaN(lvl) ? 0 : lvl;
+      userSecLvl = session ? session.securityLevel : 0;
     } else if (preFilledOk) {
       setLoading(true);
       const result = await verifyTravellerCredentials(preFilledName, preFilledId);
       setLoading(false);
       if (result.success) {
         userSecLvl = result.securityLevel ?? 0;
-        // Save to cookie since credentials matched successfully
-        document.cookie = `travellerName=${encodeURIComponent(preFilledName)}; path=/; max-age=31536000; SameSite=Lax`;
-        document.cookie = `travellerId=${encodeURIComponent(preFilledId)}; path=/; max-age=31536000; SameSite=Lax`;
-        document.cookie = `securityLevel=${encodeURIComponent(String(userSecLvl))}; path=/; max-age=31536000; SameSite=Lax`;
+        // Save to encrypted cookie since credentials matched successfully
+        const sessionObj = {
+          travellerName: preFilledName,
+          securityLevel: userSecLvl,
+          password: preFilledId
+        };
+        const encryptedSession = encryptValue(JSON.stringify(sessionObj));
+        document.cookie = `agt_traveller_session=${encodeURIComponent(encryptedSession)}; path=/; max-age=31536000; SameSite=Lax`;
         setActiveTravellerName(preFilledName);
         setActiveTravellerId(preFilledId);
         setActiveSecurityLevel(userSecLvl);
@@ -2588,7 +2664,7 @@ export default function App() {
           <div className="space-y-3">
             <div className="text-sm font-bold text-red-500">Verification unsuccessful for pre-filled credentials. Export aborted.</div>
             <div className="text-xs text-[#FFB451]/80 leading-relaxed font-sans mt-1">
-              Traveller Name and ID and does not match, Please consult{" "}
+              Traveller Name and password do not match, Please consult{" "}
               <a 
                 href="https://www.nms-agt.com/support/traveller-id" 
                 target="_blank" 
@@ -2686,7 +2762,27 @@ export default function App() {
           }
         }
         
-        /* Custom scrollbar styling in E25530 theme */
+        /* Custom scrollbar styling in E25530 theme globally and specifically */
+        ::-webkit-scrollbar {
+          height: 6px !important;
+          width: 6px !important;
+        }
+        ::-webkit-scrollbar-track {
+          background: #111111 !important;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #E25530 !important;
+          border-radius: 9999px !important;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #f17858 !important;
+        }
+        
+        * {
+          scrollbar-width: thin;
+          scrollbar-color: #E25530 #111111;
+        }
+
         .custom-scrollbar {
           scrollbar-width: thin;
           scrollbar-color: #E25530 #111111;
@@ -2810,12 +2906,12 @@ export default function App() {
               href="https://www.nms-agt.com/support"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1 hover:opacity-80 transition-opacity cursor-pointer flex items-center justify-center"
+              className="p-3 hover:opacity-80 transition-opacity cursor-pointer flex items-center justify-center group"
               title="Support"
               id="support-bug-btn"
             >
               <Bug 
-                className="w-5 h-5" 
+                className="w-5 h-5 transition-transform group-hover:animate-[spin_1.5s_linear_infinite] active:animate-[spin_0.5s_linear_infinite]" 
                 style={{ color: '#FF0500' }}
               />
             </a>
@@ -3348,7 +3444,7 @@ export default function App() {
                   animate={{ scale: 1, opacity: 1, y: 0 }}
                   exit={{ scale: 0.9, opacity: 0, y: 15 }}
                   transition={{ type: "spring", duration: 0.5 }}
-                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-2xl w-full p-8 shadow-2xl overflow-y-auto max-h-[90vh]"
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-2xl w-full p-8 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Close button inside modal header */}
@@ -3565,22 +3661,22 @@ export default function App() {
                             />
                           </div>
 
-                          {/* Traveller ID */}
+                          {/* Password */}
                           <div className="space-y-1">
                             <label className="text-[9px] uppercase tracking-wider text-[#FFB451]/60 font-mono font-bold">
-                              {t("AGT Traveller ID")}
+                              {t("Password")}
                             </label>
                             <input
-                              type="text"
+                              type="password"
                               value={settingsTravellerId}
-                              maxLength={18}
+                              maxLength={5}
                               onChange={(e) => {
-                                let val = e.target.value.toUpperCase();
-                                val = val.replace(/[^A-Z0-9?-]/g, '');
+                                let val = e.target.value;
+                                val = val.replace(/[^a-zA-Z0-9]/g, '');
                                 setSettingsTravellerId(val);
                                 setVerifyValidationError(null);
                               }}
-                              placeholder="37120130-????-1234"
+                              placeholder="•••••"
                               className="w-full px-4 py-3 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
                             />
                           </div>
@@ -3601,41 +3697,45 @@ export default function App() {
                             disabled={verifyLoading}
                             onClick={async () => {
                               const cleanName = settingsTravellerName.trim();
-                              const cleanId = settingsTravellerId.trim();
+                              const cleanPassword = settingsTravellerId.trim();
                               
-                              if (!cleanName || !cleanId) {
-                                setVerifyValidationError("Both Traveller Name and ID are required.");
+                              if (!cleanName || !cleanPassword) {
+                                setVerifyValidationError("Both Traveller Name and Password are required.");
                                 return;
                               }
 
-                              const idPattern = /^[0-9]{8}-[0-9A-Z?]{4}-[0-9]{4}$/;
-                              if (!idPattern.test(cleanId)) {
-                                setVerifyValidationError("AGT Traveller ID must match format: ########-????-#### (e.g., 37120130-????-1234)");
+                              if (cleanPassword.length !== 5 || !/^[a-zA-Z0-9]{5}$/.test(cleanPassword)) {
+                                setVerifyValidationError("Password must be exactly a five character alphanumeric sequence.");
                                 return;
                               }
 
                               setVerifyValidationError(null);
                               setVerifyLoading(true);
                               try {
-                                const result = await verifyTravellerCredentials(cleanName, cleanId);
+                                const result = await verifyTravellerCredentials(cleanName, cleanPassword);
                                 if (result.success) {
                                   const secLvl = result.securityLevel ?? 0;
                                   
-                                  // Set cookies
-                                  document.cookie = `travellerName=${encodeURIComponent(cleanName)}; path=/; max-age=31536000; SameSite=Lax`;
-                                  document.cookie = `travellerId=${encodeURIComponent(cleanId)}; path=/; max-age=31536000; SameSite=Lax`;
-                                  document.cookie = `securityLevel=${encodeURIComponent(String(secLvl))}; path=/; max-age=31536000; SameSite=Lax`;
+                                  // Set encrypted cookie
+                                  const sessionObj = {
+                                    travellerName: cleanName,
+                                    securityLevel: secLvl,
+                                    password: cleanPassword
+                                  };
+                                  const encryptedSession = encryptValue(JSON.stringify(sessionObj));
+                                  document.cookie = `agt_traveller_session=${encodeURIComponent(encryptedSession)}; path=/; max-age=31536000; SameSite=Lax`;
                                   
                                   // Update state
                                   setActiveTravellerName(cleanName);
-                                  setActiveTravellerId(cleanId);
+                                  setActiveTravellerId(cleanPassword);
                                   setActiveSecurityLevel(secLvl);
                                   
                                   // Verify cookie was created properly
-                                  const savedName = getCookie('travellerName');
-                                  const savedId = getCookie('travellerId');
+                                  const savedSession = getDecryptedSession();
+                                  const savedName = savedSession ? savedSession.travellerName : '';
+                                  const savedPassword = savedSession ? savedSession.password : '';
                                   
-                                  if (savedName === cleanName && savedId === cleanId) {
+                                  if (savedName === cleanName && savedPassword === cleanPassword) {
                                     setPopupMsg("Verification successful, setting saved");
                                   } else {
                                     setPopupMsg("Verification successful, setting save error");
@@ -3644,9 +3744,8 @@ export default function App() {
                                   // Display the error message with support link
                                   setPopupMsg(
                                     <div className="space-y-3">
-                                      <div className="text-sm font-bold text-red-500">Verification unsuccessful</div>
                                       <div className="text-xs text-[#FFB451]/80 leading-relaxed font-sans mt-1">
-                                        Traveller Name and ID and does not match, Please consult{" "}
+                                        Traveller Name and password do not match, Please consult{" "}
                                         <a 
                                           href="https://www.nms-agt.com/support/traveller-id" 
                                           target="_blank" 
@@ -3678,11 +3777,12 @@ export default function App() {
                             type="button"
                             onClick={() => {
                               // Delete cookies
+                              document.cookie = "agt_traveller_session=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
                               document.cookie = "travellerName=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
                               document.cookie = "travellerId=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
                               document.cookie = "securityLevel=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
 
-                              const isDeleted = !getCookie('travellerName') && !getCookie('travellerId');
+                              const isDeleted = !getCookie('agt_traveller_session');
                               if (isDeleted) {
                                 setPopupMsg("Reset successful");
                                 setSettingsTravellerName("");

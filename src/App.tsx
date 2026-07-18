@@ -2803,7 +2803,7 @@ export default function App() {
         }
       `}</style>
       {/* Header */}
-      <header className="border-b border-agt-orange/5 bg-black/40 backdrop-blur-md sticky top-0 z-50">
+      <header className="border-b-2 border-[#FF0500] bg-black/40 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img 

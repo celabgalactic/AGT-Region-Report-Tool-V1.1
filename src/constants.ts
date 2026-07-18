@@ -228,7 +228,7 @@ export const GALAXIES = [
   "Rudrailhik",
   "Tweretnort",
   "Snatreetze",
-  "Iwunddaracos",
+  "Iwundaracos",
   "Digarlewena",
   "Erquagsta",
   "Logovoloin",

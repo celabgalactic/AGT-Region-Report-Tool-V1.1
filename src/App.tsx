@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
+import jsQR from 'jsqr';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -22,17 +23,40 @@ import {
   Globe,
   Sliders,
   ArrowUpDown,
+  ArrowUp,
   ChevronUp,
   ChevronDown,
   RotateCcw,
   User,
   Heart,
   Bug,
-  History
+  History,
+  Eye,
+  EyeOff,
+  QrCode,
+  Copy,
+  Check,
+  Camera,
+  ExternalLink,
+  Share2,
+  BarChart2,
+  BarChart3,
+  X
 } from 'lucide-react';
+import { 
+  ResponsiveContainer, 
+  BarChart as RechartsBarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip as RechartsTooltip, 
+  CartesianGrid, 
+  Cell 
+} from 'recharts';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 import { CIVILIZATIONS, GALAXIES } from './constants';
 // @ts-ignore
 import regionsIcon from './regions-icon.png';
@@ -105,6 +129,41 @@ const formatCacheTimestamp = (timestampStr: string | null) => {
   };
 };
 
+const getCacheAgeColor = (timestampStr: string | null) => {
+  if (!timestampStr) return { textClass: 'text-red-500', hex: '#ef4444', bgDot: 'bg-red-500', shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.7)]' };
+  const date = new Date(timestampStr);
+  if (isNaN(date.getTime())) return { textClass: 'text-red-500', hex: '#ef4444', bgDot: 'bg-red-500', shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.7)]' };
+  
+  const diffMs = Date.now() - date.getTime();
+  const days = diffMs / (1000 * 60 * 60 * 24);
+  
+  if (days < 15) {
+    // Less than 15 days old -> Green
+    return {
+      textClass: 'text-emerald-400',
+      hex: '#34d399',
+      bgDot: 'bg-emerald-500',
+      shadow: 'shadow-[0_0_8px_rgba(52,211,153,0.7)]'
+    };
+  } else if (days < 45) {
+    // Between 16 and 44 days old -> Yellow
+    return {
+      textClass: 'text-yellow-400',
+      hex: '#facc15',
+      bgDot: 'bg-yellow-500',
+      shadow: 'shadow-[0_0_8px_rgba(250,204,21,0.7)]'
+    };
+  } else {
+    // 45 days or older -> Red
+    return {
+      textClass: 'text-red-500',
+      hex: '#ef4444',
+      bgDot: 'bg-red-500',
+      shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.7)]'
+    };
+  }
+};
+
 // Column configuration mapping
 interface ColumnConfig {
   name: string;
@@ -152,6 +211,186 @@ const TRANSLATIONS: TranslationDict = {
     ja: "一般ユーザー",
     zh: "公共用户",
     it: "Utente Pubblico"
+  },
+  "Record Distribution Analysis": {
+    en: "Record Distribution Analysis",
+    fr: "Analyse de Répartition des Dossiers",
+    es: "Análisis de Distribución de Registros",
+    de: "Datensatz-Verteilungsanalyse",
+    pt: "Análise de Distribuição de Registros",
+    th: "การวิเคราะห์การกระจายบันทึก",
+    hi: "रिकॉर्ड वितरण विश्लेषण",
+    ja: "レコード分布分析",
+    zh: "记录分布分析",
+    it: "Analisi della Distribuzione dei Record"
+  },
+  "Visual distribution based on current search filter criteria": {
+    en: "Visual distribution based on current search filter criteria",
+    fr: "Répartition visuelle basée sur les critères de filtre actuels",
+    es: "Distribución visual basada en los criterios de filtro actuales",
+    de: "Visuelle Verteilung basierend auf den aktuellen Filterkriterien",
+    pt: "Distribuição visual com base nos critérios de filtro atuais",
+    th: "การกระจายภาพตามเกณฑ์ตัวกรองการค้นหาปัจจุบัน",
+    hi: "वर्तमान खोज फ़िल्टर मापदंडों के आधार पर दृश्य वितरण",
+    ja: "現在の検索フィルター基準に基づく視覚的分布",
+    zh: "基于当前搜索筛选条件的直观分布",
+    it: "Distribuzione visiva basata sui criteri di filtro correnti"
+  },
+  "By Galaxy": {
+    en: "By Galaxy",
+    fr: "Par Galaxie",
+    es: "Por Galaxia",
+    de: "Nach Galaxie",
+    pt: "Por Galáxia",
+    th: "ตามกาแล็กซี",
+    hi: "गैलेक्सी द्वारा",
+    ja: "銀河別",
+    zh: "按星系",
+    it: "Per Galassia"
+  },
+  "By Civilization": {
+    en: "By Civilization",
+    fr: "Par Civilisation",
+    es: "Por Civilisation",
+    de: "Nach Zivilisation",
+    pt: "Por Civilização",
+    th: "ตามอารยธรรม",
+    hi: "सभ्यता द्वारा",
+    ja: "文明別",
+    zh: "按文明",
+    it: "Per Civiltà"
+  },
+  "Fold Down": {
+    en: "Fold Down",
+    fr: "Déplier",
+    es: "Desplegar",
+    de: "Ausklappen",
+    pt: "Desdobrar",
+    th: "คลี่ออก",
+    hi: "फ़ोल्ड डाउन",
+    ja: "展開",
+    zh: "展开",
+    it: "Apri"
+  },
+  "Fold Up": {
+    en: "Fold Up",
+    fr: "Replier",
+    es: "Plegar",
+    de: "Einklappen",
+    pt: "Dobrar",
+    th: "พับเก็บ",
+    hi: "फ़ोल्ड अप",
+    ja: "折りたたむ",
+    zh: "折叠",
+    it: "Chiudi"
+  },
+  "Drag to resize column width": {
+    en: "Drag to resize column width (Double-click to reset)",
+    fr: "Faites glisser pour redimensionner la largeur (Double-cliquez pour réinitialiser)",
+    es: "Arrastre para cambiar el ancho (Doble clic para restablecer)",
+    de: "Ziehen zum Anpassen der Breite (Doppelklick zum Zurücksetzen)",
+    pt: "Arraste para redimensionar a largura (Duplo clique para redefinir)",
+    th: "ลากเพื่อปรับขนาดความกว้างคอลัมน์ (ดับเบิลคลิกเพื่อรีเซ็ต)",
+    hi: "स्तंभ की चौड़ाई बदलने के लिए खींचें (रीसेट के लिए डबल-क्लिक करें)",
+    ja: "ドラッグして列幅を変更（ダブルクリックでリセット）",
+    zh: "拖动调整列宽（双击重置）",
+    it: "Trascina per ridimensionare la larghezza (Doppio clic per ripristinare)"
+  },
+  "Record Details": {
+    en: "Record Details",
+    fr: "Détails du Registre",
+    es: "Detalles del Registro",
+    de: "Datensatz-Details",
+    pt: "Detalhes do Registro",
+    th: "รายละเอียดบันทึก",
+    hi: "रिकॉर्ड विवरण",
+    ja: "レコードの詳細",
+    zh: "记录详情",
+    it: "Dettagli del Record"
+  },
+  "Click row to view detailed record": {
+    en: "Click row to view detailed record",
+    fr: "Cliquez sur la ligne pour voir le dossier détaillé",
+    es: "Haga clic en la fila para ver el registro detallado",
+    de: "Klicken Sie auf die Zeile, um den detaillierten Datensatz anzuzeigen",
+    pt: "Clique na linha para ver o registro detalhado",
+    th: "คลิกแถวเพื่อดูรายละเอียดบันทึก",
+    hi: "विस्तृत रिकॉर्ड देखने के लिए पंक्ति पर क्लिक करें",
+    ja: "詳細レコードを表示するには行をクリック",
+    zh: "点击行查看详细记录",
+    it: "Clicca sulla riga per visualizzare il record dettagliato"
+  },
+  "URL copied to clipboard": {
+    en: "URL copied to clipboard",
+    fr: "URL copiée dans le presse-papiers",
+    es: "URL copiada al portapapeles",
+    de: "URL in die Zwischenablage kopiert",
+    pt: "URL copiada para a área de transferência",
+    th: "คัดลอก URL ไปยังคลิปบอร์ดแล้ว",
+    hi: "URL क्लिपबोर्ड पर कॉपी हो गया",
+    ja: "URLがクリップボードにコピーされました",
+    zh: "URL已复制到剪贴板",
+    it: "URL copiata negli appunti"
+  },
+  "Download QR Code": {
+    en: "Download QR Code",
+    fr: "Télécharger le code QR",
+    es: "Descargar código QR",
+    de: "QR-Code herunterladen",
+    pt: "Baixar Código QR",
+    th: "ดาวน์โหลดคิวอาร์โค้ด",
+    hi: "QR कोड डाउनलोड करें",
+    ja: "QRコードをダウンロード",
+    zh: "下载二维码",
+    it: "Scarica Codice QR"
+  },
+  "QR Code downloaded": {
+    en: "QR Code downloaded",
+    fr: "Code QR téléchargé",
+    es: "Código QR descargado",
+    de: "QR-Code heruntergeladen",
+    pt: "Código QR baixado",
+    th: "ดาวน์โหลดคิวอาร์โค้ดเรียบร้อยแล้ว",
+    hi: "QR कोड डाउनलोड हो गया",
+    ja: "QRコードがダウンロードされました",
+    zh: "二维码已下载",
+    it: "Codice QR scaricato"
+  },
+  "Valid URL detected! Processing report state...": {
+    en: "Valid URL detected! Processing report state...",
+    fr: "URL valide détectée ! Traitement de l'état du rapport...",
+    es: "¡URL válida detectada! Procesando estado del informe...",
+    de: "Gültige URL erkannt! Berichtsstatus wird verarbeitet...",
+    pt: "URL válida detectada! Processando estado do relatório...",
+    th: "ตรวจพบ URL ที่ถูกต้อง! กำลังประมวลผลสถานะรายงาน...",
+    hi: "मान्य URL मिला! रिपोर्ट स्थिति प्रोसेस की जा रही है...",
+    ja: "有効なURLを検出しました！レポート状態を処理中...",
+    zh: "检测到有效URL！正在处理报告状态...",
+    it: "URL valida rilevata! Elaborazione stato del report..."
+  },
+  "Jump to Top": {
+    en: "Jump to Top",
+    fr: "Haut de page",
+    es: "Ir arriba",
+    de: "Nach oben",
+    pt: "Voltar ao topo",
+    th: "กลับไปด้านบน",
+    hi: "ऊपर जाएं",
+    ja: "トップへ戻る",
+    zh: "回到顶部",
+    it: "Torna in alto"
+  },
+  "AGT and All Foundations": {
+    en: "AGT and All Foundations",
+    fr: "AGT et toutes les fondations",
+    es: "AGT y todas las fundaciones",
+    de: "AGT und alle Stiftungen",
+    pt: "AGT e todas as fundações",
+    th: "AGT และมูลนิธิทั้งหมด",
+    hi: "AGT और सभी फाउंडेशन",
+    ja: "AGTおよびすべてのファウンデーション",
+    zh: "AGT 及所有基金会",
+    it: "AGT e tutte le fondazioni"
   },
   "Classified Records Omitted": {
     en: "Classified Records Omitted",
@@ -1617,6 +1856,7 @@ export default function App() {
     const session = getDecryptedSession();
     return session ? session.password : '';
   });
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [activeTravellerName, setActiveTravellerName] = useState<string>(() => {
     const session = getDecryptedSession();
     return session ? session.travellerName : '';
@@ -1756,6 +1996,254 @@ export default function App() {
   const autocompleteRef = useRef<HTMLDivElement>(null);
 
   const [selectedPriority, setSelectedPriority] = useState('All');
+  const [reportType, setReportType] = useState<'Simple' | 'Detailed' | 'Custom'>('Simple');
+
+  // Floating Jump to Top Scroll Listener
+  const [showJumpToTop, setShowJumpToTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowJumpToTop(window.scrollY > window.innerHeight);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Toast Notification State
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => {
+      setToastMsg(prev => (prev === msg ? null : prev));
+    }, 2500);
+  };
+
+  // QR Code & Mobile Access States
+  const [showQrModal, setShowQrModal] = useState<boolean>(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [isScanningCamera, setIsScanningCamera] = useState<boolean>(false);
+  const [isScanProcessing, setIsScanProcessing] = useState<boolean>(false);
+  const [scannedUrlDetected, setScannedUrlDetected] = useState<string | null>(null);
+  const [manualInputUrl, setManualInputUrl] = useState<string>('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Download QR Code as PNG image
+  const handleDownloadQrCode = () => {
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrDataUrl;
+    a.download = `AGT_Report_QR_${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast(t("QR Code downloaded"));
+  };
+
+  // Function to construct active report URL with current search & filter query params
+  const getCurrentReportUrl = (): string => {
+    if (typeof window === 'undefined') return '';
+    const url = new URL(window.location.origin + window.location.pathname);
+    if (searchKey && searchKey.trim()) {
+      url.searchParams.set('civ', searchKey.trim());
+    }
+    if (selectedGalaxy && selectedGalaxy !== 'All') {
+      url.searchParams.set('galaxy', selectedGalaxy);
+    }
+    if (selectedPriority && selectedPriority !== 'All') {
+      url.searchParams.set('priority', selectedPriority);
+    }
+    if (reportType) {
+      url.searchParams.set('reportType', reportType);
+    }
+    if (omitPublicRecords) {
+      url.searchParams.set('omitPublic', 'true');
+    }
+    if (omitPrivateRecords) {
+      url.searchParams.set('omitPrivate', 'true');
+    }
+    if (language && language !== 'en') {
+      url.searchParams.set('lang', language);
+    }
+    return url.toString();
+  };
+
+  // Restore state from URL query parameters on initial page load
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const civParam = params.get('civ') || params.get('searchKey');
+    if (civParam) setSearchKey(civParam);
+    const galaxyParam = params.get('galaxy');
+    if (galaxyParam) setSelectedGalaxy(galaxyParam);
+    const priorityParam = params.get('priority');
+    if (priorityParam) setSelectedPriority(priorityParam);
+    const reportTypeParam = params.get('reportType');
+    if (reportTypeParam && ['Simple', 'Detailed', 'Custom'].includes(reportTypeParam)) {
+      setReportType(reportTypeParam as any);
+    }
+    if (params.get('omitPublic') === 'true') setOmitPublicRecords(true);
+    if (params.get('omitPrivate') === 'true') setOmitPrivateRecords(true);
+    const langParam = params.get('lang');
+    if (langParam) setLanguage(langParam as any);
+  }, []);
+
+  // Synchronize active filters/params with URL bar
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const activeUrl = getCurrentReportUrl();
+      window.history.replaceState(null, '', activeUrl);
+    }
+  }, [searchKey, selectedGalaxy, selectedPriority, reportType, omitPublicRecords, omitPrivateRecords, language]);
+
+  // Open QR Code Modal
+  const handleOpenQrModal = async () => {
+    const currentUrl = getCurrentReportUrl();
+    try {
+      const dataUrl = await QRCode.toDataURL(currentUrl, {
+        width: 320,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' }
+      });
+      setQrDataUrl(dataUrl);
+      setCopiedLink(false);
+      setShowQrModal(true);
+    } catch (err) {
+      console.error("QR Code generation error:", err);
+    }
+  };
+
+  // Restore state from scanned or input URL
+  const applyReportUrlParams = (rawUrlStr: string) => {
+    try {
+      let urlObj: URL;
+      if (rawUrlStr.startsWith('http://') || rawUrlStr.startsWith('https://')) {
+        urlObj = new URL(rawUrlStr);
+      } else {
+        urlObj = new URL(window.location.origin + (rawUrlStr.startsWith('/') ? rawUrlStr : '/' + rawUrlStr));
+      }
+      const params = urlObj.searchParams;
+      const civParam = params.get('civ') || params.get('searchKey');
+      if (civParam !== null) setSearchKey(civParam);
+      const galaxyParam = params.get('galaxy');
+      if (galaxyParam !== null) setSelectedGalaxy(galaxyParam);
+      const priorityParam = params.get('priority');
+      if (priorityParam !== null) setSelectedPriority(priorityParam);
+      const reportTypeParam = params.get('reportType');
+      if (reportTypeParam && ['Simple', 'Detailed', 'Custom'].includes(reportTypeParam)) {
+        setReportType(reportTypeParam as any);
+      }
+      if (params.get('omitPublic') === 'true') setOmitPublicRecords(true);
+      if (params.get('omitPrivate') === 'true') setOmitPrivateRecords(true);
+      const langParam = params.get('lang');
+      if (langParam) setLanguage(langParam as any);
+
+      setPopupMsg(
+        <div className="space-y-2 text-center">
+          <div className="text-sm font-bold text-emerald-400">Mobile State Restored!</div>
+          <div className="text-xs text-[#FFB451]/80 font-mono">Report filters and query parameters synchronized successfully.</div>
+        </div>
+      );
+      setShowQrModal(false);
+      setIsScanningCamera(false);
+      setIsScanProcessing(false);
+      setScannedUrlDetected(null);
+    } catch (err) {
+      setPopupMsg("Invalid URL format or query parameters.");
+      setIsScanProcessing(false);
+      setScannedUrlDetected(null);
+    }
+  };
+
+  // Trigger manual URL restoration with visual processing indicator
+  const handleRestoreManualUrl = (rawUrlStr: string) => {
+    if (!rawUrlStr || !rawUrlStr.trim()) return;
+    setIsScanProcessing(true);
+    setScannedUrlDetected(rawUrlStr.trim());
+    setTimeout(() => {
+      applyReportUrlParams(rawUrlStr.trim());
+    }, 900);
+  };
+
+  // Camera stream control
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    if (isScanningCamera) {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+          .then(s => {
+            stream = s;
+            if (videoRef.current) {
+              videoRef.current.srcObject = s;
+              videoRef.current.play().catch(() => {});
+            }
+          })
+          .catch(err => {
+            console.error("Camera access error:", err);
+            setPopupMsg("Unable to access camera device. Check permissions or paste URL manually.");
+            setIsScanningCamera(false);
+          });
+      } else {
+        setPopupMsg("Camera media devices API not supported on this browser context.");
+        setIsScanningCamera(false);
+      }
+    }
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isScanningCamera]);
+
+  // Continuous Camera jsQR Frame Scanning Loop
+  useEffect(() => {
+    let animationFrameId: number;
+    let isUnmounted = false;
+
+    if (isScanningCamera && !isScanProcessing) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      const scanFrame = () => {
+        if (isUnmounted) return;
+        if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && ctx) {
+          canvas.height = videoRef.current.videoHeight;
+          canvas.width = videoRef.current.videoWidth;
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert"
+          });
+
+          if (code && code.data && code.data.trim()) {
+            const rawCode = code.data.trim();
+            setIsScanProcessing(true);
+            setScannedUrlDetected(rawCode);
+
+            setTimeout(() => {
+              if (!isUnmounted) {
+                applyReportUrlParams(rawCode);
+              }
+            }, 1000);
+            return;
+          }
+        }
+        animationFrameId = requestAnimationFrame(scanFrame);
+      };
+
+      animationFrameId = requestAnimationFrame(scanFrame);
+    }
+
+    return () => {
+      isUnmounted = true;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    };
+  }, [isScanningCamera, isScanProcessing]);
 
   const [allRawRows, setAllRawRows] = useState<string[][]>([]);
 
@@ -1832,7 +2320,6 @@ export default function App() {
     };
   }, []);
 
-  const [reportType, setReportType] = useState<'Simple' | 'Detailed' | 'Custom'>('Simple');
   const [data, setData] = useState<any[]>([]);
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1896,6 +2383,233 @@ export default function App() {
       uniqueGalaxies: galaxies.size
     };
   }, [matchedRecords]);
+
+  // Chart Distribution State & Calculation
+  const [chartGroupBy, setChartGroupBy] = useState<'galaxy' | 'civilization'>('galaxy');
+  const [isChartExpanded, setIsChartExpanded] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('agt_chart_expanded');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    }
+    return true; // Default is fold down (expanded / open)
+  });
+
+  // Detailed Record Popup Modal State
+  const [selectedRecordForModal, setSelectedRecordForModal] = useState<any | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedRecordForModal) {
+        setSelectedRecordForModal(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedRecordForModal]);
+
+  // Specified columns for detailed record popup (A, B, C, AB, E, AQ, AH, AI, AJ, AK, J, K, L, M, N, O, P, Q, S, T, U, V, W, X, AE, AF, AG)
+  const DETAIL_COLUMN_INDICES = useMemo(() => [
+    0,  // A
+    1,  // B
+    2,  // C
+    27, // AB
+    4,  // E
+    42, // AQ
+    33, // AH
+    34, // AI
+    35, // AJ
+    36, // AK
+    9,  // J
+    10, // K
+    11, // L
+    12, // M
+    13, // N
+    14, // O
+    15, // P
+    16, // Q
+    18, // S
+    19, // T
+    20, // U
+    21, // V
+    22, // W
+    23, // X
+    30, // AE
+    31, // AF
+    32  // AG
+  ], []);
+
+  const getDetailFieldLabel = (colIdx: number): string => {
+    let label = '';
+    if (allRawRows && allRawRows.length >= 2 && allRawRows[1]?.[colIdx]) {
+      label = String(allRawRows[1][colIdx]).trim();
+    }
+    if (!label) {
+      const fallbackMap: Record<number, string> = {
+        0: 'Region Name',
+        1: 'Galaxy',
+        2: 'Civilization',
+        4: 'Quadrant',
+        9: 'Game Release',
+        10: 'Earliest Surveyor',
+        11: 'Latest Surveyor',
+        12: 'Latest Survey',
+        13: 'Summary Notes',
+        14: 'Location Notes',
+        15: 'Additional Notes',
+        16: 'Civilized Notes',
+        18: 'Region Age',
+        19: 'Lowest Known Phantom System',
+        20: 'Wiki Link',
+        21: 'External Link',
+        22: 'Video Link',
+        23: 'Light Year Estimate',
+        27: 'System Name',
+        30: 'Security Classification',
+        31: 'Legacy Name',
+        32: 'Legacy Wiki Link',
+        33: 'Security Level',
+        34: 'System Count',
+        35: 'Planet Count',
+        36: 'Moon Count',
+        42: 'Priority'
+      };
+      label = fallbackMap[colIdx] || `Field ${colIdx}`;
+    }
+    return label.replace(/^Col\s*[A-Z0-9]+\s*[:-]\s*/i, '').replace(/^[A-Z]{1,2}\s*[:-]\s*/i, '');
+  };
+
+  const getDetailFieldValue = (record: any, colIdx: number): string => {
+    if (!record) return '';
+    if (record._rawRow && record._rawRow[colIdx] !== undefined) {
+      return String(record._rawRow[colIdx] || '').trim();
+    }
+    const label = getDetailFieldLabel(colIdx);
+    if (record[label] !== undefined) {
+      return String(record[label] || '').trim();
+    }
+    return '';
+  };
+
+  const toggleChartExpanded = () => {
+    setIsChartExpanded(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('agt_chart_expanded', String(next));
+      }
+      return next;
+    });
+  };
+
+  const chartData = useMemo(() => {
+    if (!matchedRecords || matchedRecords.length === 0) return [];
+
+    const galaxyFieldName = columns[1]?.name || '_galaxy';
+    const civFieldName = columns[2]?.name || '_civilization';
+
+    const counts: Record<string, number> = {};
+
+    matchedRecords.forEach(record => {
+      let key = '';
+      if (chartGroupBy === 'galaxy') {
+        key = String(record[galaxyFieldName] || record._galaxy || '').trim();
+        if (!key) key = 'Unspecified Galaxy';
+      } else {
+        key = String(record[civFieldName] || record._civilization || '').trim();
+        if (!key) key = 'Unspecified Civilization';
+      }
+      counts[key] = (counts[key] || 0) + 1;
+    });
+
+    let items = Object.keys(counts).map(name => ({
+      name,
+      count: counts[name]
+    })).sort((a, b) => b.count - a.count);
+
+    if (items.length > 15) {
+      const topItems = items.slice(0, 15);
+      const otherCount = items.slice(15).reduce((sum, item) => sum + item.count, 0);
+      if (otherCount > 0) {
+        topItems.push({ name: 'Others', count: otherCount });
+      }
+      items = topItems;
+    }
+
+    return items;
+  }, [matchedRecords, chartGroupBy, columns]);
+
+  // Column Resizing State
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [resizingCol, setResizingCol] = useState<string | null>(null);
+
+  const handleResizeStart = (e: React.MouseEvent, col: ColumnConfig) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const thElement = (e.currentTarget as HTMLElement).closest('th');
+    const startWidth = thElement ? thElement.getBoundingClientRect().width : (columnWidths[col.name] || 150);
+
+    setResizingCol(col.name);
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      moveEvent.preventDefault();
+      const deltaX = moveEvent.clientX - startX;
+      const newWidth = Math.max(50, Math.round(startWidth + deltaX));
+      setColumnWidths(prev => ({
+        ...prev,
+        [col.name]: newWidth
+      }));
+    };
+
+    const onMouseUp = () => {
+      setResizingCol(null);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const resetColumnWidth = (colName: string) => {
+    setColumnWidths(prev => {
+      const updated = { ...prev };
+      delete updated[colName];
+      return updated;
+    });
+  };
+
+  const getMergedColStyle = (col: ColumnConfig) => {
+    const baseStyle = getColumnStyle(col.colIndex);
+    const customWidth = columnWidths[col.name];
+    if (customWidth !== undefined) {
+      return {
+        ...baseStyle,
+        width: `${customWidth}px`,
+        minWidth: `${customWidth}px`,
+        maxWidth: `${customWidth}px`,
+        boxSizing: 'border-box' as const
+      };
+    }
+    return baseStyle;
+  };
+
+  const ChartCustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-[#161616] border-2 border-[#FF0500] p-3 rounded-xl shadow-[0_0_15px_rgba(255,5,0,0.4)] font-mono text-xs z-50">
+          <p className="font-bold text-white mb-1">{label}</p>
+          <div className="flex items-center gap-2 text-[#FFB451]">
+            <span className="w-2 h-2 rounded-full bg-[#FF0500]"></span>
+            <span>{payload[0].value} {payload[0].value === 1 ? 'Record' : 'Records'}</span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -2148,6 +2862,7 @@ export default function App() {
           rowObj._region = row[0] || '';
           rowObj._galaxy = row[1] || '';
           rowObj._civilization = row[2] || '';
+          rowObj._rawRow = row;
           return rowObj;
         });
 
@@ -2191,9 +2906,17 @@ export default function App() {
     }
 
     const matches = sourceData.filter(row => {
-      // IF the user types ALL or leaves blank then this field will match on anything including blank contents in the civilization field
-      const civMatch = currentCivTerm === 'all' || !currentCivTerm || 
-                      String(row[civFieldName] || '').toLowerCase().includes(currentCivTerm);
+      const rowCivVal = String(row[civFieldName] || row._civilization || '').trim().toLowerCase();
+      let civMatch = false;
+
+      if (currentCivTerm === 'all' || !currentCivTerm) {
+        civMatch = true;
+      } else if (currentCivTerm === 'agt and all foundations') {
+        civMatch = rowCivVal === 'alliance of galactic travellers' || rowCivVal.endsWith('travellers foundation');
+      } else {
+        civMatch = rowCivVal.includes(currentCivTerm);
+      }
+
       // IF the user types ALL or leaves blank then this field will match on anything including blank contents in the galaxy field
       const galMatch = currentGalTerm === 'all' || !currentGalTerm ||
                       String(row[galaxyFieldName] || '').toLowerCase().includes(currentGalTerm);
@@ -2679,6 +3402,103 @@ export default function App() {
       }
     });
 
+    const activeReportUrl = getCurrentReportUrl();
+    let pdfQrDataUrl: string | null = null;
+    try {
+      pdfQrDataUrl = await QRCode.toDataURL(activeReportUrl, {
+        width: 300,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' }
+      });
+    } catch (qrErr) {
+      console.error("PDF QR code generation failed:", qrErr);
+    }
+
+    if (pdfQrDataUrl) {
+      doc.addPage();
+      const finalPageNum = doc.getNumberOfPages();
+
+      // Recurring Header on Final Page
+      const logoX = 20;
+      const logoY = 10;
+      const logoSize = 10;
+      if (iconBase64) {
+        doc.addImage(iconBase64, 'PNG', logoX, logoY, logoSize, logoSize);
+      } else {
+        doc.setFillColor(255, 5, 0);
+        doc.rect(logoX, logoY, logoSize, logoSize, "F");
+      }
+
+      doc.setFontSize(10);
+      doc.setFont("Helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text(`AGT Region Report - Galaxy: ${galaxyFilterVal} / Civ: ${civFilterVal}`, logoX + 13, logoY + 6);
+
+      doc.setFontSize(8);
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Page ${finalPageNum}`, 277, logoY + 6, { align: "right" });
+
+      doc.setDrawColor(255, 5, 0);
+      doc.setLineWidth(0.5);
+      doc.line(logoX, logoY + logoSize + 2, 277, logoY + logoSize + 2);
+
+      // Clean Layout: Main Heading
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(22);
+      doc.setTextColor(255, 5, 0);
+      doc.text("Mobile Report Access", 148.5, 48, { align: "center" });
+
+      // Instruction Text
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(60, 60, 60);
+      doc.text("Scan this QR code with a mobile camera to view and restore this report with active query parameters.", 148.5, 58, { align: "center" });
+
+      // Framed QR Code Image
+      const qrBoxWidth = 65;
+      const qrBoxHeight = 65;
+      const qrX = 148.5 - qrBoxWidth / 2;
+      const qrY = 66;
+
+      doc.setDrawColor(255, 5, 0);
+      doc.setLineWidth(0.8);
+      doc.rect(qrX - 3, qrY - 3, qrBoxWidth + 6, qrBoxHeight + 6);
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.rect(qrX - 1.5, qrY - 1.5, qrBoxWidth + 3, qrBoxHeight + 3);
+
+      doc.addImage(pdfQrDataUrl, 'PNG', qrX, qrY, qrBoxWidth, qrBoxHeight);
+
+      // Clickable URL Link
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(0, 85, 204);
+
+      const maxUrlWidth = 220;
+      const urlLines = doc.splitTextToSize(activeReportUrl, maxUrlWidth);
+      let currentUrlY = 148;
+      urlLines.forEach((line: string) => {
+        doc.text(line, 148.5, currentUrlY, { align: "center" });
+        const lineWidth = doc.getTextWidth(line);
+        doc.link(148.5 - lineWidth / 2, currentUrlY - 4, lineWidth, 6, { url: activeReportUrl });
+        currentUrlY += 6;
+      });
+
+      doc.setFont("Helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      doc.text("Click the link above or scan with a mobile camera to view live report", 148.5, currentUrlY + 4, { align: "center" });
+
+      // Recurring Footer on Final Page
+      doc.setFontSize(8);
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      const footerDateStr = formatDateToDDMMMYYYY(now);
+      const militaryTimeStr = formatMilitaryTime(now);
+      doc.text(`Report Created on: ${footerDateStr} ${militaryTimeStr}`, 20, 203, { align: "left" });
+    }
+
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
@@ -2876,7 +3696,7 @@ export default function App() {
       `}</style>
       {/* Header */}
       <header className="border-b-2 border-[#FF0500] bg-black/40 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 md:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img 
               src="/AGTIcon.png" 
@@ -2906,16 +3726,21 @@ export default function App() {
           <div className="flex items-center gap-6">
             {cacheTimestamp && !loading ? (
               <div className="hidden md:flex flex-col items-end text-right font-mono text-[9px] text-[#FFB451] tracking-widest">
-                <div>
-                  {t("STATUS:")} <span className="text-blue-500 font-bold">{t("Cached")}</span>
-                </div>
                 {(() => {
+                  const ageColor = getCacheAgeColor(cacheTimestamp);
                   const formatted = formatCacheTimestamp(cacheTimestamp);
-                  return formatted ? (
-                    <div className="text-[8px] text-blue-400 font-bold tracking-wider mt-0.5 uppercase">
-                      {formatted.dateStr} {formatted.timeStr}
-                    </div>
-                  ) : null;
+                  return (
+                    <>
+                      <div>
+                        {t("STATUS:")} <span className={`${ageColor.textClass} font-bold`}>{t("Cached")}</span>
+                      </div>
+                      {formatted && (
+                        <div className={`text-[8px] ${ageColor.textClass} font-bold tracking-wider mt-0.5 uppercase`}>
+                          {formatted.dateStr} {formatted.timeStr}
+                        </div>
+                      )}
+                    </>
+                  );
                 })()}
               </div>
             ) : (
@@ -2930,23 +3755,21 @@ export default function App() {
               </div>
             )}
             {/* Pulsing dot when status text is not displayed */}
-            <button 
-              onClick={() => setShowSettings(true)}
-              className="md:hidden flex items-center justify-center w-4 h-4 relative cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
-              title="Click to open settings"
-            >
-              <span className={`w-2.5 h-2.5 rounded-full animate-ping absolute shrink-0 ${
-                loading ? 'bg-yellow-500' :
-                cacheTimestamp ? 'bg-blue-500' :
-                sheetUrl ? 'bg-emerald-500' : 'bg-red-500'
-              }`} />
-              <span className={`w-2.5 h-2.5 rounded-full relative shrink-0 ${
-                loading ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.7)]' : 
-                cacheTimestamp ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.7)]' :
-                sheetUrl ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]' : 
-                'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.7)]'
-              }`} />
-            </button>
+            {(() => {
+              const ageColor = getCacheAgeColor(cacheTimestamp);
+              const colorBg = loading ? 'bg-yellow-500' : cacheTimestamp ? ageColor.bgDot : sheetUrl ? 'bg-emerald-500' : 'bg-red-500';
+              const colorShadow = loading ? 'shadow-[0_0_8px_rgba(234,179,8,0.7)]' : cacheTimestamp ? ageColor.shadow : sheetUrl ? 'shadow-[0_0_8px_rgba(16,185,129,0.7)]' : 'shadow-[0_0_8px_rgba(239,68,68,0.7)]';
+              return (
+                <button 
+                  onClick={() => setShowSettings(true)}
+                  className="md:hidden flex items-center justify-center w-4 h-4 relative cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
+                  title="Click to open settings"
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full animate-ping absolute shrink-0 ${colorBg}`} />
+                  <span className={`w-2.5 h-2.5 rounded-full relative shrink-0 ${colorBg} ${colorShadow}`} />
+                </button>
+              );
+            })()}
             
             {/* Desktop user identity */}
             <div className="hidden md:block">
@@ -3006,7 +3829,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-16 relative">
+      <main className="w-full px-4 sm:px-6 md:px-8 py-8 md:py-16 relative">
         {/* Contribute Button - Upper right corner, 50% smaller than PDF Report button */}
         <div className="absolute top-4 right-6 z-10">
           <a
@@ -3075,7 +3898,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Civilization Autocomplete Input with label over it */}
               <div className="flex flex-col space-y-2">
                 <label className="text-[#FFB451] text-[10px] font-mono font-bold tracking-widest uppercase block text-left">
@@ -3750,19 +4573,33 @@ export default function App() {
                             <label className="text-[9px] uppercase tracking-wider text-[#FFB451]/60 font-mono font-bold">
                               {t("Password")}
                             </label>
-                            <input
-                              type="password"
-                              value={settingsTravellerId}
-                              maxLength={5}
-                              onChange={(e) => {
-                                let val = e.target.value;
-                                val = val.replace(/[^a-zA-Z0-9]/g, '');
-                                setSettingsTravellerId(val);
-                                setVerifyValidationError(null);
-                              }}
-                              placeholder="•••••"
-                              className="w-full px-4 py-3 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
-                            />
+                            <div className="relative">
+                              <input
+                                type={showPassword ? "text" : "password"}
+                                value={settingsTravellerId}
+                                maxLength={5}
+                                onChange={(e) => {
+                                  let val = e.target.value;
+                                  val = val.replace(/[^a-zA-Z0-9]/g, '');
+                                  setSettingsTravellerId(val);
+                                  setVerifyValidationError(null);
+                                }}
+                                placeholder={t("Enter Password...")}
+                                className="w-full pl-4 pr-10 py-3 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#FFB451]/60 hover:text-white transition-colors p-1 cursor-pointer"
+                                title={showPassword ? t("Hide Password") : t("Show Password")}
+                              >
+                                {showPassword ? (
+                                  <EyeOff className="w-4 h-4 text-[#FF0500]" />
+                                ) : (
+                                  <Eye className="w-4 h-4 text-[#FFB451]/70" />
+                                )}
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -3932,53 +4769,62 @@ export default function App() {
                     <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
                       <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30 col-span-1 md:col-span-2">
                         <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
-                          <Database className="w-3 h-3 text-[#FFB451]" />
+                          <Database className="w-3.5 h-3.5 text-[#FF0500]" />
                           {t("Region DB Source")}
                         </h3>
-                        <div className="space-y-4">
-                          <button 
-                            onClick={() => {
-                              setShowSettings(false);
-                              fetchData();
-                            }}
-                            className="w-full py-4 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/85 transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
-                          >
-                            {t("Re-Sync Region Data")}
-                          </button>
-                          {cacheTimestamp && (() => {
-                            const formatted = formatCacheTimestamp(cacheTimestamp);
-                            return formatted ? (
-                              <div className="text-center text-[10px] text-blue-500 font-mono font-bold tracking-wider mt-2">
-                                {t("Last Cache")}: {formatted.dateStr} {formatted.timeStr}
-                              </div>
-                            ) : null;
-                          })()}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left font-mono text-xs border-collapse">
+                            <thead>
+                              <tr className="border-b border-[#FF0500]/30 text-[9px] uppercase tracking-widest text-[#FFB451]/70 font-bold">
+                                <th className="py-2.5 px-3">{t("Database")}</th>
+                                <th className="py-2.5 px-3 text-center">{t("Records")}</th>
+                                <th className="py-2.5 px-3 text-center">{t("Cache Timestamp")}</th>
+                                <th className="py-2.5 px-3 text-right">{t("Action")}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr className="border-b border-white/5 hover:bg-white/[0.02]">
+                                <td className="py-3 px-3 font-bold text-white flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                                  <span>Region DB</span>
+                                </td>
+                                <td className="py-3 px-3 text-center text-[#FFB451] font-bold">
+                                  {allRawRows.length > 1 ? (allRawRows.length - 1).toLocaleString() : (data.length || 0).toLocaleString()}
+                                </td>
+                                <td className="py-3 px-3 text-center font-bold">
+                                  {cacheTimestamp ? (() => {
+                                    const formatted = formatCacheTimestamp(cacheTimestamp);
+                                    const ageColor = getCacheAgeColor(cacheTimestamp);
+                                    return formatted ? (
+                                      <span className={`${ageColor.textClass} tracking-wider uppercase font-bold`}>
+                                        {formatted.dateStr} {formatted.timeStr}
+                                      </span>
+                                    ) : <span className="text-red-500 font-bold">N/A</span>;
+                                  })() : (
+                                    <span className="text-red-500 font-bold">{t("No Cache")}</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      setShowSettings(false);
+                                      fetchData();
+                                    }}
+                                    disabled={loading}
+                                    className="px-4 py-1.5 bg-[#FF0500] border border-[#FF0500] text-white rounded-lg text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/85 transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.3)] disabled:opacity-50 inline-flex items-center gap-1.5"
+                                  >
+                                    <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                                    <span>{t("Sync")}</span>
+                                  </button>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     </div>
 
-                    {/* Change Log Section */}
-                    <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
-                        <div className="space-y-1">
-                          <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
-                            <History className="w-3.5 h-3.5 text-[#FF0500]" />
-                            {t("Change Log")}
-                          </h3>
-                        </div>
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setShowChangeLog(true);
-                            fetchChangeLog();
-                          }}
-                          className="px-6 py-3 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
-                        >
-                          <History className="w-4 h-4" />
-                          <span>{t("View Change Log")}</span>
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </motion.div>
               </div>
@@ -4091,6 +4937,227 @@ export default function App() {
             )}
           </AnimatePresence>
 
+          {/* Mobile Access QR Code Modal Overlay */}
+          <AnimatePresence>
+            {showQrModal && (
+              <div 
+                className="fixed inset-0 bg-black/90 backdrop-blur-md z-[170] flex items-center justify-center p-4 pointer-events-auto overflow-y-auto"
+                onClick={() => {
+                  setShowQrModal(false);
+                  setIsScanningCamera(false);
+                }}
+              >
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0, y: 15 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 15 }}
+                  transition={{ type: "spring", duration: 0.5 }}
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-xl w-full p-6 sm:p-8 shadow-2xl flex flex-col my-auto overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Modal Header */}
+                  <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-6 shrink-0">
+                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
+                      <QrCode className="w-5 h-5 text-[#FF0500] animate-pulse" />
+                      {t("Mobile Report Access")}
+                    </h3>
+                    <button 
+                      onClick={() => {
+                        setShowQrModal(false);
+                        setIsScanningCamera(false);
+                      }}
+                      className="px-5 py-2.5 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                    >
+                      {t("Close")}
+                    </button>
+                  </div>
+
+                  {/* Body Content */}
+                  <div className="flex flex-col items-center space-y-6 text-center">
+                    {!isScanningCamera ? (
+                      <>
+                        <p className="text-xs text-[#FFB451]/80 font-mono leading-relaxed max-w-md">
+                          {t("Scan this QR code with your mobile camera to view and restore this report with active search and query parameters.")}
+                        </p>
+
+                        {/* Framed QR Code & Download Button */}
+                        {qrDataUrl ? (
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="relative p-4 bg-white rounded-2xl border-4 border-[#FF0500] shadow-[0_0_25px_rgba(255,5,0,0.35)] flex items-center justify-center">
+                              <img 
+                                src={qrDataUrl} 
+                                alt="Report QR Code" 
+                                className="w-56 h-56 object-contain rounded-lg"
+                              />
+                            </div>
+                            
+                            <button
+                              type="button"
+                              onClick={handleDownloadQrCode}
+                              className="px-5 py-2 bg-[#161616] hover:bg-[#FF0500] border-2 border-[#FF0500] text-[#FFB451] hover:text-white rounded-xl text-[10px] font-mono font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_12px_rgba(255,5,0,0.25)] hover:shadow-[0_0_20px_rgba(255,5,0,0.5)] active:scale-95"
+                              title={t("Download QR Code")}
+                            >
+                              <Download className="w-3.5 h-3.5 text-[#FF0500] group-hover:text-white" />
+                              <span>{t("Download QR Code")}</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-56 h-56 bg-black/40 border-2 border-dashed border-[#FF0500]/40 rounded-2xl flex items-center justify-center text-[#FFB451]/60 text-xs font-mono">
+                            <RefreshCw className="w-6 h-6 animate-spin text-[#FF0500]" />
+                          </div>
+                        )}
+
+                        {/* URL Copy & Actions Box */}
+                        <div className="w-full space-y-3 pt-2">
+                          <label className="text-[10px] uppercase tracking-widest text-[#FFB451]/70 font-mono font-bold block text-left">
+                            {t("Active Report Link")}
+                          </label>
+                          <div className="flex items-center gap-2 bg-[#161616] border border-[#FF0500]/30 rounded-xl p-2.5">
+                            <input 
+                              type="text" 
+                              readOnly 
+                              value={getCurrentReportUrl()} 
+                              className="w-full bg-transparent text-xs font-mono text-[#FFB451] focus:outline-none select-all truncate px-2"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const activeUrl = getCurrentReportUrl();
+                                navigator.clipboard.writeText(activeUrl);
+                                setCopiedLink(true);
+                                showToast(t("URL copied to clipboard"));
+                                setTimeout(() => setCopiedLink(false), 2000);
+                              }}
+                              className="px-4 py-2 bg-[#FF0500] hover:bg-[#FF0500]/85 text-white rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.3)]"
+                            >
+                              {copiedLink ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{copiedLink ? t("Copied!") : t("Copy URL")}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Mobile Camera Scan & Manual Restore Controls */}
+                        <div className="w-full pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setIsScanningCamera(true)}
+                            className="w-full sm:w-1/2 py-3 bg-[#161616] hover:bg-white/10 border-2 border-[#FF0500] text-[#FFB451] hover:text-white rounded-xl text-[10px] font-mono font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer"
+                          >
+                            <Camera className="w-4 h-4 text-[#FF0500]" />
+                            <span>{t("Camera Scanner")}</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const activeUrl = getCurrentReportUrl();
+                              if (navigator.share) {
+                                navigator.share({
+                                  title: 'AGT Region Report',
+                                  url: activeUrl
+                                }).catch(() => {});
+                              } else {
+                                navigator.clipboard.writeText(activeUrl);
+                                setCopiedLink(true);
+                                showToast(t("URL copied to clipboard"));
+                                setTimeout(() => setCopiedLink(false), 2000);
+                              }
+                            }}
+                            className="w-full sm:w-1/2 py-3 bg-[#FF0500] hover:bg-[#FF0500]/85 border-2 border-[#FF0500] text-white rounded-xl text-[10px] font-mono font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)]"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            <span>{t("Share Report Link")}</span>
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      /* Live Camera Scanner View */
+                      <div className="w-full space-y-4">
+                        <div className="space-y-1">
+                          {isScanProcessing ? (
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500 text-emerald-400 text-xs font-mono font-bold shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse">
+                              <Check className="w-4 h-4 text-emerald-400" />
+                              <span>{t("Valid URL detected! Processing report state...")}</span>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-xs text-[#FFB451] font-mono font-bold uppercase tracking-wider">
+                                {t("Mobile Device Camera Scanner")}
+                              </p>
+                              <p className="text-[10px] text-[#FFB451]/60 font-mono">
+                                {t("Point your camera at an AGT QR Code or paste link below to sync report state.")}
+                              </p>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Camera Viewfinder Box with Green Scanning Indicator when valid URL detected */}
+                        <div className={`relative w-full aspect-square max-w-xs mx-auto rounded-2xl overflow-hidden border-2 transition-all duration-300 flex items-center justify-center bg-black ${
+                          isScanProcessing 
+                            ? 'border-emerald-500 shadow-[0_0_35px_rgba(16,185,129,0.9)] ring-4 ring-emerald-500/30' 
+                            : 'border-[#FF0500] shadow-[0_0_20px_rgba(255,5,0,0.3)]'
+                        }`}>
+                          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted></video>
+                          
+                          {/* Crosshair Scanner Frame */}
+                          <div className={`absolute inset-8 border-2 border-dashed rounded-xl pointer-events-none flex items-center justify-center transition-colors duration-300 ${
+                            isScanProcessing ? 'border-emerald-400 bg-emerald-500/10' : 'border-[#FF0500]'
+                          }`}>
+                            <div className={`w-full h-0.5 transition-colors duration-300 ${
+                              isScanProcessing 
+                                ? 'bg-emerald-400 shadow-[0_0_15px_#10b981]' 
+                                : 'bg-[#FF0500] animate-pulse shadow-[0_0_10px_#FF0500]'
+                            }`}></div>
+                          </div>
+
+                          {/* Scanned Badge Overlay */}
+                          {isScanProcessing && (
+                            <div className="absolute bottom-3 inset-x-3 bg-black/85 border border-emerald-500/80 rounded-xl p-2.5 backdrop-blur-md flex items-center justify-center gap-2 text-emerald-400 text-[10px] font-mono font-bold shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                              <span className="truncate">{scannedUrlDetected || t("Valid URL detected!")}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Manual Link Input Fallback */}
+                        <div className="space-y-2 pt-2">
+                          <label className="text-[10px] uppercase tracking-widest text-[#FFB451]/70 font-mono font-bold block text-left">
+                            {t("Paste Scanned URL")}
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={manualInputUrl}
+                              onChange={(e) => setManualInputUrl(e.target.value)}
+                              placeholder="https://.../?civ=...&galaxy=..."
+                              className="w-full px-3 py-2 bg-[#161616] border border-[#FF0500]/40 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500] focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRestoreManualUrl(manualInputUrl)}
+                              disabled={isScanProcessing || !manualInputUrl.trim()}
+                              className="px-4 py-2 bg-[#FF0500] hover:bg-[#FF0500]/85 disabled:opacity-50 text-white font-mono font-bold text-[10px] uppercase tracking-wider rounded-xl cursor-pointer shrink-0 transition-all"
+                            >
+                              {t("Restore")}
+                            </button>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsScanningCamera(false)}
+                          className="w-full py-2.5 bg-transparent border border-white/20 text-[#FFB451] hover:text-white rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-colors"
+                        >
+                          {t("Back to QR Code")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
             {/* Results Section - Full Width for Table */}
             <div className="w-full">
               <AnimatePresence mode="wait">
@@ -4124,6 +5191,13 @@ export default function App() {
  
                       {/* Download and Export Buttons Preceding the Record List */}
                       <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          onClick={handleOpenQrModal}
+                          className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          <span>{t("QR Code")}</span>
+                        </button>
                         {reportType === 'Simple' && (
                           <button
                             onClick={downloadFullReportPdf}
@@ -4150,6 +5224,123 @@ export default function App() {
                           <span>{t("Export CSV")}</span>
                         </button>
                       </div>
+                    </div>
+
+                    {/* Distribution Bar Chart Visualization - Fold up/down curtain panel */}
+                    <div className="border-b border-[#FF0500]/20 bg-[#111111]/60">
+                      <div className="px-8 pt-5 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none">
+                        <div 
+                          className="flex items-center gap-2.5 cursor-pointer group/chart-head"
+                          onClick={toggleChartExpanded}
+                        >
+                          <BarChart2 className="w-5 h-5 text-[#FF0500] group-hover/chart-head:scale-110 transition-transform shrink-0 animate-pulse" />
+                          <div>
+                            <h4 className="text-xs font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
+                              <span>{t("Record Distribution Analysis")}</span>
+                              <span className="text-[9px] font-mono font-normal text-[#FFB451]/70 px-2 py-0.5 rounded bg-black/50 border border-[#FF0500]/30 transition-colors group-hover/chart-head:border-[#FF0500]">
+                                {isChartExpanded ? t("Fold Up") : t("Fold Down")}
+                              </span>
+                            </h4>
+                            <p className="text-[10px] text-[#FFB451]/60 font-mono">
+                              {t("Visual distribution based on current search filter criteria")}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          {/* Galaxy vs Civilization Mode Selector */}
+                          <div className="flex items-center gap-1.5 bg-[#161616] border border-[#FF0500]/30 p-1 rounded-xl">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setChartGroupBy('galaxy');
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                                chartGroupBy === 'galaxy'
+                                  ? 'bg-[#FF0500] text-white shadow-[0_0_10px_rgba(255,5,0,0.4)]'
+                                  : 'text-[#FFB451]/70 hover:text-white'
+                              }`}
+                            >
+                              {t("By Galaxy")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setChartGroupBy('civilization');
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                                chartGroupBy === 'civilization'
+                                  ? 'bg-[#FF0500] text-white shadow-[0_0_10px_rgba(255,5,0,0.4)]'
+                                  : 'text-[#FFB451]/70 hover:text-white'
+                              }`}
+                            >
+                              {t("By Civilization")}
+                            </button>
+                          </div>
+
+                          {/* Fold / Expand Toggle Button */}
+                          <button
+                            type="button"
+                            onClick={toggleChartExpanded}
+                            className="p-2 bg-[#161616] hover:bg-[#FF0500] text-[#FFB451] hover:text-white border border-[#FF0500]/40 rounded-xl transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.2)] flex items-center justify-center"
+                            title={isChartExpanded ? t("Fold Up") : t("Fold Down")}
+                          >
+                            {isChartExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Curtain Panel Content */}
+                      <AnimatePresence initial={false}>
+                        {isChartExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.35, ease: "easeInOut" }}
+                            className="overflow-hidden px-8 pb-6 border-t border-[#FF0500]/10"
+                          >
+                            {chartData.length > 0 ? (
+                              <div className="w-full h-[250px] pt-4">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <RechartsBarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 40 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                    <XAxis 
+                                      dataKey="name" 
+                                      stroke="#FFB45180" 
+                                      tick={{ fill: '#FFB451', fontSize: 10, fontFamily: 'monospace' }}
+                                      interval={0}
+                                      angle={-25}
+                                      textAnchor="end"
+                                      height={50}
+                                    />
+                                    <YAxis 
+                                      stroke="#FFB45180" 
+                                      tick={{ fill: '#FFB451', fontSize: 10, fontFamily: 'monospace' }}
+                                      allowDecimals={false}
+                                    />
+                                    <RechartsTooltip content={<ChartCustomTooltip />} cursor={{ fill: 'rgba(255, 5, 0, 0.08)' }} />
+                                    <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={45}>
+                                      {chartData.map((_, index) => (
+                                        <Cell 
+                                          key={`cell-${index}`} 
+                                          fill={index % 2 === 0 ? '#FF0500' : '#ff4d4d'} 
+                                        />
+                                      ))}
+                                    </Bar>
+                                  </RechartsBarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            ) : (
+                              <div className="py-8 text-center text-xs font-mono text-[#FFB451]/50 border border-dashed border-white/10 rounded-xl mt-3">
+                                {t("No distribution data available for current search query.")}
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
                     {/* Summary Dashboard Component */}
@@ -4225,30 +5416,54 @@ export default function App() {
                             {columns.filter(col => col.enabled).map((col, idx) => {
                               const isSorted = sortColumn === col.name;
                               const isReducedCol = col.colIndex !== undefined && [1, 10, 11, 12, 18, 19, 23].includes(col.colIndex);
-                              const headerStyle = getColumnStyle(col.colIndex);
+                              const headerStyle = getMergedColStyle(col);
                               return (
                                 <th 
                                   key={idx} 
                                   onClick={() => toggleSort(col.name)}
                                   style={headerStyle}
-                                  className={`py-3.5 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] cursor-pointer hover:bg-[#FF0500]/10 hover:text-white transition-all group/th overflow-hidden ${
+                                  className={`relative py-3.5 px-4 text-[0.625rem] uppercase tracking-widest font-bold cursor-pointer hover:bg-[#FF0500]/10 hover:text-white transition-all group/th overflow-hidden select-none ${
+                                    isSorted ? 'bg-[#FF0500]/15 text-white border-b-2 border-[#FF0500]' : 'text-[#FFB451]'
+                                  } ${
                                     isReducedCol ? 'whitespace-normal break-normal' : 'whitespace-nowrap text-ellipsis'
                                   }`}
                                   title={`${t("Click to sort by")} ${t(col.name)}`}
                                 >
-                                  <div className="flex items-start gap-1 select-none">
+                                  <div className="flex items-center gap-1.5 select-none pr-2">
                                     <span className={isReducedCol ? "line-clamp-2 block leading-normal" : "whitespace-nowrap overflow-hidden text-ellipsis"}>
                                       {t(col.name)}
                                     </span>
                                     {isSorted ? (
                                       sortDirection === 'asc' ? (
-                                        <ChevronUp className="w-3.5 h-3.5 text-[#FF0500] shrink-0 mt-0.5" />
+                                        <span className="inline-flex items-center shrink-0" title={t("Sorted Ascending")}>
+                                          <svg className="w-2.5 h-2.5 text-[#FF0500] fill-current drop-shadow-[0_0_8px_rgba(255,5,0,0.8)]" viewBox="0 0 10 10">
+                                            <polygon points="5,1 9,8 1,8" />
+                                          </svg>
+                                        </span>
                                       ) : (
-                                        <ChevronDown className="w-3.5 h-3.5 text-[#FF0500] shrink-0 mt-0.5" />
+                                        <span className="inline-flex items-center shrink-0" title={t("Sorted Descending")}>
+                                          <svg className="w-2.5 h-2.5 text-[#FF0500] fill-current drop-shadow-[0_0_8px_rgba(255,5,0,0.8)]" viewBox="0 0 10 10">
+                                            <polygon points="1,2 9,2 5,9" />
+                                          </svg>
+                                        </span>
                                       )
                                     ) : (
-                                      <ArrowUpDown className="w-3 h-3 text-[#FFB451]/30 group-hover/th:text-[#FFB451]/60 shrink-0 transition-colors mt-0.5" />
+                                      <ArrowUpDown className="w-3 h-3 text-[#FFB451]/30 group-hover/th:text-[#FFB451]/60 shrink-0 transition-colors" />
                                     )}
+                                  </div>
+
+                                  {/* Resizer Handle */}
+                                  <div
+                                    className="absolute right-0 top-0 bottom-0 w-2.5 cursor-col-resize z-30 group/resizer flex items-center justify-center hover:bg-[#FF0500]/30 transition-colors select-none"
+                                    onMouseDown={(e) => handleResizeStart(e, col)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onDoubleClick={(e) => {
+                                      e.stopPropagation();
+                                      resetColumnWidth(col.name);
+                                    }}
+                                    title={t("Drag to resize column width")}
+                                  >
+                                    <div className={`w-[2px] h-full ${resizingCol === col.name ? 'bg-[#FF0500]' : 'bg-[#FF0500]/25 group-hover/resizer:bg-[#FF0500]'}`} />
                                   </div>
                                 </th>
                               );
@@ -4261,11 +5476,13 @@ export default function App() {
                             return (
                               <tr 
                                 key={rIdx} 
-                                className={`transition-colors group ${
+                                onClick={() => setSelectedRecordForModal(record)}
+                                className={`transition-colors group cursor-pointer ${
                                   isHighPriority 
-                                    ? 'bg-[#eab308]/10 hover:bg-[#eab308]/15' 
-                                    : 'hover:bg-white/[0.04]'
+                                    ? 'bg-[#eab308]/10 hover:bg-[#eab308]/20' 
+                                    : 'hover:bg-white/[0.08]'
                                 }`}
+                                title={t("Click row to view detailed record")}
                               >
                                 {columns.filter(col => col.enabled).map((col, cIdx) => {
                                   const val = record[col.name];
@@ -4273,7 +5490,7 @@ export default function App() {
                                   const isLinkCol = isNarrowUrlCol || col.name === 'NMS Wiki Link' || String(col.name).toLowerCase().includes('wiki') || String(col.name).toLowerCase().includes('link');
                                   const isValidUrl = typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'));
                                   
-                                  const cellStyle = getColumnStyle(col.colIndex);
+                                  const cellStyle = getMergedColStyle(col);
                                   const isReducedCol = col.colIndex !== undefined && [1, 10, 11, 12, 18, 19, 23].includes(col.colIndex);
                                   
                                   return (
@@ -4293,6 +5510,7 @@ export default function App() {
                                         href={isValidUrl ? val : `https://${val}`} 
                                         target="_blank" 
                                         rel="noopener noreferrer" 
+                                        onClick={(e) => e.stopPropagation()}
                                         className="text-[#3b82f6] hover:text-blue-400 hover:underline font-black cursor-pointer"
                                       >
                                         LINK
@@ -4302,6 +5520,7 @@ export default function App() {
                                         href={isValidUrl ? val : `https://${val}`} 
                                         target="_blank" 
                                         rel="noopener noreferrer" 
+                                        onClick={(e) => e.stopPropagation()}
                                         className="text-[#FF0500] hover:underline hover:text-[#FF0500]/80 font-black cursor-pointer"
                                       >
                                         {val}
@@ -4404,17 +5623,17 @@ export default function App() {
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
                           <div className="relative flex items-center justify-center w-2.5 h-2.5">
-                            <span className={`animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full opacity-75 ${
-                              loading ? 'bg-yellow-500' : 
-                              isUsingCache ? 'bg-blue-500' : 
-                              sheetUrl ? 'bg-emerald-500' : 'bg-red-500'
-                            }`}></span>
-                            <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
-                              loading ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]' :
-                              isUsingCache ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]' :
-                              sheetUrl ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
-                              'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-                            }`}></span>
+                            {(() => {
+                              const ageColor = getCacheAgeColor(cacheTimestamp);
+                              const colorBg = loading ? 'bg-yellow-500' : cacheTimestamp ? ageColor.bgDot : sheetUrl ? 'bg-emerald-500' : 'bg-red-500';
+                              const colorShadow = loading ? 'shadow-[0_0_8px_rgba(234,179,8,0.6)]' : cacheTimestamp ? ageColor.shadow : sheetUrl ? 'shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'shadow-[0_0_8px_rgba(239,68,68,0.5)]';
+                              return (
+                                <>
+                                  <span className={`animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full opacity-75 ${colorBg}`}></span>
+                                  <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${colorBg} ${colorShadow}`}></span>
+                                </>
+                              );
+                            })()}
                           </div>
                           <span className="text-[9px] uppercase tracking-widest text-[#FFB451] font-bold">{t("Ledger Integrity: Verified")}</span>
                         </div>
@@ -4447,30 +5666,30 @@ export default function App() {
       </main>
 
       {/* Footer Area */}
-      <footer className="bg-[#FFB451] mt-auto">
-        <div className="max-w-5xl mx-auto px-6 py-12 flex flex-col items-center gap-6 text-black">
-          <div className="flex flex-wrap justify-center items-center gap-y-2 text-[10px] uppercase tracking-[0.2em] font-bold">
-            <a href="https://www.nms-agt.com" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">Home</a>
-            <span className="ml-1 mr-2 text-black/40">|</span>
-            <a href="https://www.nms-agt.com/about-the-agt" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">About</a>
-            <span className="ml-1 mr-2 text-black/40">|</span>
-            <a href="https://www.nms-agt.com/team" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">Team</a>
-            <span className="ml-1 mr-2 text-black/40">|</span>
-            <a href="https://www.nms-agt.com/contribute" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">Contribute</a>
-            <span className="ml-1 mr-2 text-black/40">|</span>
-            <a href="https://www.nms-agt.com/agt-galactic-archives" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">Galactic Archives</a>
-            <span className="ml-1 mr-2 text-black/40">|</span>
-            <a href="https://www.nms-agt.com/engage" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">Engage</a>
-            <span className="ml-1 mr-2 text-black/40">|</span>
-            <a href="https://www.nms-agt.com/agt-navi" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">AGT NAVI</a>
-            <span className="ml-1 mr-2 text-black/40">|</span>
-            <a href="https://www.nms-agt.com/terms" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">Terms</a>
-            <span className="ml-1 mr-2 text-black/40">|</span>
-            <a href="https://www.nms-agt.com/support" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">Support</a>
-            <span className="ml-1 mr-2 text-black/40">|</span>
-            <a href="https://www.nms-agt.com/terms/copyright" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity">Copyright</a>
+      <footer className="bg-[#FFB451] mt-auto text-black font-bold">
+        <div className="w-full px-4 sm:px-6 md:px-8 py-12 flex flex-col items-center gap-6 text-black font-bold">
+          <div className="flex flex-wrap justify-center items-center gap-y-2 text-[10px] uppercase tracking-[0.2em] font-black">
+            <a href="https://www.nms-agt.com" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">Home</a>
+            <span className="ml-1 mr-2 text-black/40 font-bold">|</span>
+            <a href="https://www.nms-agt.com/about-the-agt" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">About</a>
+            <span className="ml-1 mr-2 text-black/40 font-bold">|</span>
+            <a href="https://www.nms-agt.com/team" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">Team</a>
+            <span className="ml-1 mr-2 text-black/40 font-bold">|</span>
+            <a href="https://www.nms-agt.com/contribute" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">Contribute</a>
+            <span className="ml-1 mr-2 text-black/40 font-bold">|</span>
+            <a href="https://www.nms-agt.com/agt-galactic-archives" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">Galactic Archives</a>
+            <span className="ml-1 mr-2 text-black/40 font-bold">|</span>
+            <a href="https://www.nms-agt.com/engage" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">Engage</a>
+            <span className="ml-1 mr-2 text-black/40 font-bold">|</span>
+            <a href="https://www.nms-agt.com/agt-navi" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">AGT NAVI</a>
+            <span className="ml-1 mr-2 text-black/40 font-bold">|</span>
+            <a href="https://www.nms-agt.com/terms" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">Terms</a>
+            <span className="ml-1 mr-2 text-black/40 font-bold">|</span>
+            <a href="https://www.nms-agt.com/support" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">Support</a>
+            <span className="ml-1 mr-2 text-black/40 font-bold">|</span>
+            <a href="https://www.nms-agt.com/terms/copyright" target="_blank" rel="noopener noreferrer" className="hover:opacity-60 transition-opacity font-bold">Copyright</a>
           </div>
-          <p className="text-[9px] font-mono uppercase tracking-[0.3em] font-bold">&copy; 2026 Alliance of Galactic Travellers</p>
+          <p className="text-[9px] font-mono uppercase tracking-[0.3em] font-black">&copy; {new Date().getFullYear()} Alliance of Galactic Travellers</p>
         </div>
       </footer>
 
@@ -4575,6 +5794,158 @@ export default function App() {
         loop
         preload="auto"
       />
+
+      {/* Detailed Record Modal Popup */}
+      <AnimatePresence>
+        {selectedRecordForModal && (
+          <div 
+            className="fixed inset-0 bg-black/85 backdrop-blur-md z-[200] flex items-center justify-center p-3 sm:p-6 overflow-y-auto pointer-events-auto"
+            onClick={() => setSelectedRecordForModal(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="bg-[#121212] border-2 border-[#FF0500]/60 rounded-2xl w-full max-w-4xl max-h-[88vh] flex flex-col shadow-[0_0_40px_rgba(255,5,0,0.35)] overflow-hidden text-[#FFB451] my-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-4 bg-[#181818] border-b border-[#FF0500]/30 flex items-center justify-between shrink-0 select-none">
+                <div className="flex items-center gap-3 overflow-hidden pr-2">
+                  <div className="p-2 rounded-xl bg-[#FF0500]/15 border border-[#FF0500]/40 shrink-0">
+                    <Database className="w-5 h-5 text-[#FF0500]" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#FFB451]/60 block">
+                      {t("Record Details")}
+                    </span>
+                    <h3 className="text-base sm:text-lg font-black text-white font-mono truncate tracking-wide">
+                      {getDetailFieldValue(selectedRecordForModal, 0) || selectedRecordForModal._region || t("Record Overview")}
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRecordForModal(null)}
+                  className="p-2 rounded-xl bg-black/40 hover:bg-[#FF0500] text-[#FFB451] hover:text-white border border-[#FF0500]/30 transition-all cursor-pointer shrink-0"
+                  title={t("Close")}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Scrollable Body */}
+              <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {DETAIL_COLUMN_INDICES.map((colIdx) => {
+                    const label = getDetailFieldLabel(colIdx);
+                    const val = getDetailFieldValue(selectedRecordForModal, colIdx);
+                    
+                    // Check if field is URL column or has URL format
+                    const isKnownUrlCol = [20, 21, 22, 32].includes(colIdx);
+                    const isValidUrlPattern = typeof val === 'string' && val.trim().length > 0 && (
+                      val.startsWith('http://') || 
+                      val.startsWith('https://') || 
+                      val.startsWith('www.') ||
+                      (isKnownUrlCol && val.includes('.'))
+                    );
+                    const isNotesCol = [13, 14, 15, 16].includes(colIdx);
+                    const targetUrl = val.startsWith('http') ? val : `https://${val}`;
+
+                    return (
+                      <div 
+                        key={colIdx} 
+                        className={`bg-[#181818]/90 border border-[#FF0500]/25 rounded-xl p-3.5 flex flex-col justify-between transition-colors hover:border-[#FF0500]/50 ${
+                          isNotesCol ? 'md:col-span-2 lg:col-span-3' : ''
+                        }`}
+                      >
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451]/75 block mb-1.5">
+                          {t(label)}
+                        </span>
+                        
+                        {isValidUrlPattern ? (
+                          <div>
+                            <a 
+                              href={targetUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-950/60 border border-blue-500/50 text-blue-400 hover:text-blue-300 hover:bg-blue-900/60 hover:border-blue-400 font-black text-xs font-mono transition-all shadow-[0_0_10px_rgba(59,130,246,0.25)] cursor-pointer"
+                            >
+                              <span>LINK</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        ) : val ? (
+                          <span className="text-xs font-mono text-white leading-relaxed break-words whitespace-pre-wrap">
+                            {val}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-mono text-[#FFB451]/30 italic">
+                            -
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-3.5 bg-[#181818] border-t border-[#FF0500]/30 flex items-center justify-between shrink-0 select-none text-[10px] font-mono text-[#FFB451]/60">
+                <span>AGT System Core // Detailed Record Protocol</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRecordForModal(null)}
+                  className="px-4 py-1.5 rounded-lg bg-[#FF0500] hover:bg-[#FF0500]/80 text-white font-bold uppercase transition-all cursor-pointer shadow-[0_0_10px_rgba(255,5,0,0.3)]"
+                >
+                  {t("Close")}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Jump to Top Action Button */}
+      <AnimatePresence>
+        {showJumpToTop && (
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            transition={{ duration: 0.2 }}
+            onClick={scrollToTop}
+            className="fixed bottom-6 right-6 z-[250] px-4 py-3 bg-[#FF0500] hover:bg-[#FF0500]/85 text-white border-2 border-white/20 rounded-full shadow-[0_0_25px_rgba(255,5,0,0.6)] flex items-center gap-2 font-mono font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+            title={t("Jump to Top")}
+            id="jump-to-top-btn"
+          >
+            <ArrowUp className="w-4 h-4 text-white" />
+            <span className="hidden sm:inline">{t("Jump to Top")}</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Toast Notification */}
+      <AnimatePresence>
+        {toastMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] bg-[#111111]/95 border-2 border-[#FF0500]/70 text-white px-5 py-3 rounded-2xl shadow-[0_0_30px_rgba(255,5,0,0.4)] backdrop-blur-lg flex items-center gap-3 select-none pointer-events-none"
+          >
+            <div className="p-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shrink-0">
+              <Check className="w-4 h-4 text-emerald-400" />
+            </div>
+            <span className="text-xs font-mono font-bold tracking-wide text-[#FFB451]">
+              {toastMsg}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

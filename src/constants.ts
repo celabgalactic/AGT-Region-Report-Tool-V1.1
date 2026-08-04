@@ -1,5 +1,6 @@
 export const CIVILIZATIONS = [
   "Alliance of Galactic Travellers",
+  "AGT and All Foundations",
   "Intergalactic Travellers Foundation",
   "Calypso Travellers Foundation",
   "Hyades Travellers Foundation",

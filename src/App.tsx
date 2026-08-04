@@ -27,7 +27,8 @@ import {
   RotateCcw,
   User,
   Heart,
-  Bug
+  Bug,
+  History
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
@@ -1542,6 +1543,11 @@ export const verifyTravellerCredentials = async (nameInput: string, passwordInpu
   }
 };
 
+export interface ChangeLogGroup {
+  date: string;
+  changes: string[];
+}
+
 export default function App() {
   const [sheetUrl, setSheetUrl] = useState<string>(() => {
     const saved = localStorage.getItem('sheet_reporter_url');
@@ -1552,6 +1558,10 @@ export default function App() {
     return saved;
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [showChangeLog, setShowChangeLog] = useState(false);
+  const [changeLogData, setChangeLogData] = useState<ChangeLogGroup[] | null>(null);
+  const [changeLogLoading, setChangeLogLoading] = useState(false);
+  const [changeLogError, setChangeLogError] = useState<string | null>(null);
   const [textScale, setTextScale] = useState<string>(() => {
     return localStorage.getItem('agt_text_scale') || '1';
   });
@@ -1963,6 +1973,68 @@ export default function App() {
       localStorage.setItem('sheet_reporter_url', sheetUrl);
     }
   }, [sheetUrl]);
+
+  const fetchChangeLog = async () => {
+    if (changeLogData) return;
+    
+    setChangeLogLoading(true);
+    setChangeLogError(null);
+    try {
+      const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5oPutHGlK-X_5TqRo23a7vQ_cuiY2a5Puq1VWP05it1tx5GCswVf1-VzlSMIYJ_sZOW0yCSIsZ5PN/pub?gid=1472003907&single=true&output=csv";
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Could not fetch Change Log sheet");
+      const csvText = await res.text();
+      
+      const parsed = Papa.parse<string[]>(csvText, { skipEmptyLines: true });
+      const rows = parsed.data;
+      
+      const groups: ChangeLogGroup[] = [];
+      let currentGroup: ChangeLogGroup | null = null;
+      
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+        
+        const colA = row[0] ? row[0].trim() : '';
+        const colB = row[1] ? row[1].trim() : '';
+        
+        // Skip header row if it contains "date" or "change"
+        if (i === 0 && (colA.toLowerCase().includes('date') || colB.toLowerCase().includes('change') || colB.toLowerCase().includes('feature'))) {
+          continue;
+        }
+        
+        // Skip entirely blank rows
+        if (colA === '' && colB === '') continue;
+        
+        if (colA !== '') {
+          currentGroup = {
+            date: colA,
+            changes: []
+          };
+          groups.push(currentGroup);
+        }
+        
+        if (colB !== '') {
+          if (currentGroup) {
+            currentGroup.changes.push(colB);
+          } else {
+            currentGroup = {
+              date: 'General Updates',
+              changes: [colB]
+            };
+            groups.push(currentGroup);
+          }
+        }
+      }
+      
+      setChangeLogData(groups);
+    } catch (err: any) {
+      console.error(err);
+      setChangeLogError(err?.message || "Failed to fetch development log.");
+    } finally {
+      setChangeLogLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     if (!sheetUrl) {
@@ -3453,12 +3525,24 @@ export default function App() {
                       <Settings className="w-5 h-5 text-[#FF0500] animate-spin" style={{ color: '#FF0500' }} />
                       {t("Settings")}
                     </h3>
-                    <button 
-                      onClick={() => setShowSettings(false)}
-                      className="px-5 py-2.5 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
-                    >
-                      Close
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => {
+                          setShowChangeLog(true);
+                          fetchChangeLog();
+                        }}
+                        className="px-4 py-2.5 bg-transparent border-2 border-[#FF0500] text-[#FFB451] hover:text-white hover:bg-[#FF0500]/15 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center gap-2"
+                      >
+                        <History className="w-3.5 h-3.5 text-[#FF0500]" />
+                        <span>{t("Change Log")}</span>
+                      </button>
+                      <button 
+                        onClick={() => setShowSettings(false)}
+                        className="px-5 py-2.5 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -3872,6 +3956,135 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Change Log Section */}
+                    <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
+                        <div className="space-y-1">
+                          <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
+                            <History className="w-3.5 h-3.5 text-[#FF0500]" />
+                            {t("Change Log")}
+                          </h3>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setShowChangeLog(true);
+                            fetchChangeLog();
+                          }}
+                          className="px-6 py-3 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                        >
+                          <History className="w-4 h-4" />
+                          <span>{t("View Change Log")}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Change Log Modal Overlay */}
+          <AnimatePresence>
+            {showChangeLog && (
+              <div 
+                className="fixed inset-0 bg-black/90 backdrop-blur-md z-[160] flex items-center justify-center p-4 pointer-events-auto"
+                onClick={() => setShowChangeLog(false)}
+              >
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0, y: 15 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 15 }}
+                  transition={{ type: "spring", duration: 0.5 }}
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-2xl w-full p-8 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Modal Header */}
+                  <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-6 shrink-0">
+                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
+                      <History className="w-5 h-5 text-[#FF0500] animate-pulse" />
+                      {t("Development Log")}
+                    </h3>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => {
+                          setChangeLogData(null);
+                          fetchChangeLog();
+                        }}
+                        disabled={changeLogLoading}
+                        className="p-2.5 bg-transparent border-2 border-[#FF0500]/30 hover:border-[#FF0500] text-[#FFB451] rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center gap-1.5"
+                        title={t("Refresh Log")}
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${changeLogLoading ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button 
+                        onClick={() => setShowChangeLog(false)}
+                        className="px-5 py-2.5 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                      >
+                        {t("Close")}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Modal Content Area */}
+                  <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6">
+                    {changeLogLoading && (
+                      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                        <RefreshCw className="w-8 h-8 text-[#FF0500] animate-spin" />
+                        <span className="text-xs text-[#FFB451]/75 font-mono tracking-widest uppercase animate-pulse">
+                          {t("Fetching development logs...")}
+                        </span>
+                      </div>
+                    )}
+
+                    {changeLogError && (
+                      <div className="text-center py-16 space-y-4">
+                        <AlertCircle className="w-10 h-10 text-red-500 mx-auto animate-bounce" />
+                        <p className="text-xs text-red-500 font-mono">
+                          {changeLogError}
+                        </p>
+                        <button
+                          onClick={() => {
+                            setChangeLogData(null);
+                            fetchChangeLog();
+                          }}
+                          className="px-4 py-2 bg-[#FF0500]/10 border border-[#FF0500] text-[#FFB451] rounded-lg text-[10px] uppercase font-mono tracking-wider hover:bg-[#FF0500]/20 transition-all cursor-pointer"
+                        >
+                          {t("Retry Connection")}
+                        </button>
+                      </div>
+                    )}
+
+                    {!changeLogLoading && !changeLogError && changeLogData && (
+                      <div className="space-y-6">
+                        {changeLogData.length === 0 ? (
+                          <div className="text-center py-16">
+                            <p className="text-xs text-[#FFB451]/60 font-mono">
+                              {t("No change logs found.")}
+                            </p>
+                          </div>
+                        ) : (
+                          changeLogData.map((group, groupIdx) => (
+                            <div key={groupIdx} className="border-2 border-[#FF0500]/10 hover:border-[#FF0500]/30 rounded-xl bg-[#111111]/40 p-5 transition-all space-y-3">
+                              <div className="flex items-center gap-2.5 pb-2 border-b border-white/5">
+                                <span className="w-2 h-2 rounded-full bg-[#E25530] shadow-[0_0_8px_#E25530]"></span>
+                                <h4 className="text-xs font-mono font-bold text-white tracking-widest uppercase">
+                                  {group.date}
+                                </h4>
+                              </div>
+                              <ul className="space-y-2.5 pl-4">
+                                {group.changes.map((change, changeIdx) => (
+                                  <li key={changeIdx} className="text-[11px] text-[#FFB451]/90 font-mono leading-relaxed list-disc marker:text-[#E25530]">
+                                    {change}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               </div>

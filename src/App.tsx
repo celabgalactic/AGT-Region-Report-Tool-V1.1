@@ -380,6 +380,18 @@ const TRANSLATIONS: TranslationDict = {
     zh: "回到顶部",
     it: "Torna in alto"
   },
+  "File Exported Successfully": {
+    en: "File Exported Successfully",
+    fr: "Fichier exporté avec succès",
+    es: "Archivo exportado con éxito",
+    de: "Datei erfolgreich exportiert",
+    pt: "Arquivo exportado com sucesso",
+    th: "ส่งออกไฟล์สำเร็จแล้ว",
+    hi: "फ़ाइल सफलतापूर्वक निर्यातीत",
+    ja: "ファイルのエクスポートに成功しました",
+    zh: "文件导出成功",
+    it: "File esportato con successo"
+  },
   "AGT and All Foundations": {
     en: "AGT and All Foundations",
     fr: "AGT et toutes les fondations",
@@ -1129,6 +1141,18 @@ const TRANSLATIONS: TranslationDict = {
     hi: "AGT सुरक्षित आर्काइव क्लाइंट",
     ja: "AGT セキュアアーカイブクライアント",
     zh: "AGT 安全档案客户端"
+  },
+  "Other Settings": {
+    en: "Other Settings",
+    fr: "Autres paramètres",
+    es: "Otros ajustes",
+    de: "Weitere Einstellungen",
+    pt: "Outras configurações",
+    th: "การตั้งค่าอื่นๆ",
+    hi: "अन्य सेटिंग्स",
+    ja: "その他の設定",
+    zh: "其他设置",
+    it: "Altre impostazioni"
   },
   "Select Language": {
     en: "Select Language",
@@ -1998,16 +2022,25 @@ export default function App() {
   const [selectedPriority, setSelectedPriority] = useState('All');
   const [reportType, setReportType] = useState<'Simple' | 'Detailed' | 'Custom'>('Simple');
 
-  // Floating Jump to Top Scroll Listener
+  // Floating Jump to Top Scroll Listener & Mobile Detection
   const [showJumpToTop, setShowJumpToTop] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
 
   useEffect(() => {
     const handleScroll = () => {
       setShowJumpToTop(window.scrollY > window.innerHeight);
     };
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleResize, { passive: true });
     handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    handleResize();
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const scrollToTop = () => {
@@ -2527,9 +2560,11 @@ export default function App() {
       count: counts[name]
     })).sort((a, b) => b.count - a.count);
 
-    if (items.length > 15) {
-      const topItems = items.slice(0, 15);
-      const otherCount = items.slice(15).reduce((sum, item) => sum + item.count, 0);
+    const maxCategories = isMobile ? 5 : 15;
+
+    if (items.length > maxCategories) {
+      const topItems = items.slice(0, maxCategories);
+      const otherCount = items.slice(maxCategories).reduce((sum, item) => sum + item.count, 0);
       if (otherCount > 0) {
         topItems.push({ name: 'Others', count: otherCount });
       }
@@ -2537,7 +2572,7 @@ export default function App() {
     }
 
     return items;
-  }, [matchedRecords, chartGroupBy, columns]);
+  }, [matchedRecords, chartGroupBy, columns, isMobile]);
 
   // Column Resizing State
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
@@ -3163,6 +3198,7 @@ export default function App() {
     });
 
     const levelNames: { [key: number]: string } = {
+      0: "Public",
       1: "Private",
       2: "Restricted",
       3: "Top Secret",
@@ -3499,6 +3535,28 @@ export default function App() {
       doc.text(`Report Created on: ${footerDateStr} ${militaryTimeStr}`, 20, 203, { align: "left" });
     }
 
+    // Add faint diagonal watermark (Security Clearance & Traveler Name) across all pages
+    const totalPages = doc.getNumberOfPages();
+    const hasCookieCreds = !!(activeTravellerName && activeTravellerId);
+    const userSecLvl = hasCookieCreds ? activeSecurityLevel : 0;
+    const clearanceLabel = (levelNames[userSecLvl] || "Public").toUpperCase();
+    const travelerLabel = (hasCookieCreds && activeTravellerName ? activeTravellerName : "Public User").toUpperCase();
+    const watermarkLines = [
+      `CLEARANCE LEVEL: ${clearanceLabel}`,
+      `TRAVELLER: ${travelerLabel}`
+    ];
+
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.saveGraphicsState();
+      doc.setGState(new (doc as any).GState({ opacity: 0.08 }));
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(255, 5, 0); // Faint red accent tint
+      doc.text(watermarkLines, 148.5, 98, { align: "center", angle: 30 });
+      doc.restoreGraphicsState();
+    }
+
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
@@ -3508,6 +3566,7 @@ export default function App() {
     const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
 
     doc.save(`AGT_Region_Report_${timestamp}.pdf`);
+    showToast(t("File Exported Successfully"));
     } catch (err) {
       console.error(err);
     } finally {
@@ -3624,6 +3683,7 @@ export default function App() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      showToast(t("File Exported Successfully"));
     } catch (err) {
       console.error(err);
     } finally {
@@ -4339,11 +4399,11 @@ export default function App() {
                   animate={{ scale: 1, opacity: 1, y: 0 }}
                   exit={{ scale: 0.9, opacity: 0, y: 15 }}
                   transition={{ type: "spring", duration: 0.5 }}
-                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-2xl w-full p-8 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-2xl w-full p-5 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Close button inside modal header */}
-                  <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-6">
+                  <div className="flex justify-between items-center pb-3 border-b border-[#FF0500]/20 mb-4">
                     <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
                       <Settings className="w-5 h-5 text-[#FF0500] animate-spin" style={{ color: '#FF0500' }} />
                       {t("Settings")}
@@ -4354,29 +4414,29 @@ export default function App() {
                           setShowChangeLog(true);
                           fetchChangeLog();
                         }}
-                        className="px-4 py-2.5 bg-transparent border-2 border-[#FF0500] text-[#FFB451] hover:text-white hover:bg-[#FF0500]/15 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center gap-2"
+                        className="px-3 py-1.5 bg-transparent border-2 border-[#FF0500] text-[#FFB451] hover:text-white hover:bg-[#FF0500]/15 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center gap-2"
                       >
                         <History className="w-3.5 h-3.5 text-[#FF0500]" />
                         <span>{t("Change Log")}</span>
                       </button>
                       <button 
                         onClick={() => setShowSettings(false)}
-                        className="px-5 py-2.5 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+                        className="px-4 py-1.5 bg-[#FF0500] border-2 border-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.3)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                       >
                         Close
                       </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     {/* Display Settings Section */}
-                    <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
+                    <div className="space-y-3 border-2 border-[#FF0500] p-3.5 rounded-xl bg-black/30">
                       <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                         <Sliders className="w-3 h-3 text-[#FFB451]" />
                         {t("Display Settings")}
                       </h3>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
+                      <div className="space-y-2.5">
+                        <div className="space-y-1">
                           <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">{t("Max Records on screen")}</span>
                           <select
                             value={itemsPerPage}
@@ -4384,7 +4444,7 @@ export default function App() {
                               setItemsPerPage(Number(e.target.value));
                               setCurrentPage(1);
                             }}
-                            className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
+                            className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-2 px-3 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
                           >
                             <option value={15} className="bg-[#161616] text-[#FFB451]">{t("15 Records")}</option>
                             <option value={30} className="bg-[#161616] text-[#FFB451]">{t("30 Records")}</option>
@@ -4393,7 +4453,7 @@ export default function App() {
                           </select>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                           <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">{t("Text Scaling (Desktop Mode)")}</span>
                           <select
                             value={textScale}
@@ -4401,7 +4461,7 @@ export default function App() {
                               setTextScale(e.target.value);
                               localStorage.setItem('agt_text_scale', e.target.value);
                             }}
-                            className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
+                            className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-2 px-3 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
                           >
                             <option value="1" className="bg-[#161616] text-[#FFB451]">{t("1x (Default)")}</option>
                             <option value="1.25" className="bg-[#161616] text-[#FFB451]">{t("1.25x")}</option>
@@ -4414,14 +4474,14 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Language Settings Section */}
-                    <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
+                    {/* Other Settings Section (Consolidated Language & Anthem Toggle) */}
+                    <div className="space-y-3 border-2 border-[#FF0500] p-3.5 rounded-xl bg-black/30">
                       <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                         <Globe className="w-3 h-3 text-[#FFB451]" />
-                        {t("Select Language")}
+                        {t("Other Settings")}
                       </h3>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
+                      <div className="space-y-2.5">
+                        <div className="space-y-1">
                           <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">{t("Select Language")}</span>
                           <select
                             value={language}
@@ -4430,7 +4490,7 @@ export default function App() {
                               setLanguage(newLang);
                               localStorage.setItem('agt_language', newLang);
                             }}
-                            className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
+                            className="w-full bg-[#161616] border-2 border-[#FF0500] rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider text-[#FFB451] py-2 px-3 focus:outline-none focus:border-[#FF0500] cursor-pointer transition-colors"
                           >
                             <option value="en" className="bg-[#161616] text-[#FFB451]">English (EN)</option>
                             <option value="fr" className="bg-[#161616] text-[#FFB451]">Français (FR)</option>
@@ -4444,11 +4504,31 @@ export default function App() {
                             <option value="zh" className="bg-[#161616] text-[#FFB451]">中文 (ZH)</option>
                           </select>
                         </div>
+
+                        {/* Consolidated AGT Anthem Toggle */}
+                        <div className="space-y-1 pt-2 border-t border-white/10">
+                          <span className="text-[10px] text-[#FFB451]/60 uppercase tracking-widest font-bold font-mono block mb-1">{t("AGT Anthem")}</span>
+                          <button 
+                            type="button"
+                            onClick={() => setAudioEnabled(!audioEnabled)}
+                            className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-[#FF0500] text-white transition-all text-[10px] uppercase tracking-widest font-bold cursor-pointer ${
+                              audioEnabled ? 'bg-[#FF0500]/25 border-[#FF0500] shadow-[0_0_10px_rgba(255,5,0,0.2)]' : 'border-white/20 bg-black/40 opacity-70 hover:opacity-100'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-[#FF0500]" /> : <VolumeX className="w-3.5 h-3.5 text-[#FFB451]/50" />}
+                              <span>{t("AGT Anthem")}</span>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold ${audioEnabled ? 'bg-[#FF0500] text-white' : 'bg-white/10 text-white/50'}`}>
+                              {audioEnabled ? t('Active') : t('Muted')}
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
                     {/* Custom Report Columns Section */}
-                    <div className="col-span-1 md:col-span-2 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30 relative overflow-hidden transition-all duration-300">
+                    <div className="col-span-1 md:col-span-2 border-2 border-[#FF0500] p-3.5 rounded-xl bg-black/30 relative overflow-hidden transition-all duration-300">
                       <div 
                         onClick={() => setCustomColumnsExpanded(!customColumnsExpanded)}
                         className="flex items-center justify-between gap-3 cursor-pointer select-none group"
@@ -4474,10 +4554,10 @@ export default function App() {
                         {customColumnsExpanded && (
                           <motion.div
                             initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                            animate={{ height: "auto", opacity: 1, marginTop: 16 }}
+                            animate={{ height: "auto", opacity: 1, marginTop: 12 }}
                             exit={{ height: 0, opacity: 0, marginTop: 0 }}
                             transition={{ duration: 0.3, ease: "easeInOut" }}
-                            className="space-y-4 overflow-hidden"
+                            className="space-y-3 overflow-hidden"
                           >
                             <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-white/5">
                               <div className="flex items-center gap-2">
@@ -4491,7 +4571,7 @@ export default function App() {
                                     });
                                     setCustomReportToggles(updated);
                                   }}
-                                  className="px-2.5 py-1.5 border border-[#FF0500] bg-[#FF0500]/10 hover:bg-[#FF0500]/20 text-[#FFB451] hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
+                                  className="px-2.5 py-1 border border-[#FF0500] bg-[#FF0500]/10 hover:bg-[#FF0500]/20 text-[#FFB451] hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
                                 >
                                   {t("Select All")}
                                 </button>
@@ -4505,13 +4585,13 @@ export default function App() {
                                     });
                                     setCustomReportToggles(updated);
                                   }}
-                                  className="px-2.5 py-1.5 border border-[#FFB451]/20 bg-transparent hover:bg-white/[0.05] text-[#FFB451]/70 hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
+                                  className="px-2.5 py-1 border border-[#FFB451]/20 bg-transparent hover:bg-white/[0.05] text-[#FFB451]/70 hover:text-white rounded text-[8px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all"
                                 >
                                   {t("Unselect All")}
                                 </button>
                               </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-left">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5 text-left">
                               {AVAILABLE_CUSTOM_TOGGLES.map((toggle) => {
                                 const isActive = !!customReportToggles[toggle.idx];
                                 return (
@@ -4525,13 +4605,13 @@ export default function App() {
                                         [toggle.idx]: !prev[toggle.idx]
                                       }));
                                     }}
-                                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border-2 text-[10px] font-mono font-bold tracking-tight text-left cursor-pointer transition-all ${
+                                    className={`flex items-center gap-2 p-2 rounded-lg border-2 text-[10px] font-mono font-bold tracking-tight text-left cursor-pointer transition-all ${
                                       isActive 
                                         ? 'bg-[#FF0500]/15 border-[#FF0500] text-white shadow-sm'
                                         : 'bg-transparent border-[#FFB451]/10 text-[#FFB451]/40 hover:border-[#FFB451]/20'
                                     }`}
                                   >
-                                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isActive ? 'bg-[#FF0500] animate-pulse shadow-[0_0_5px_#FF0500]' : 'bg-[#FFB451]/30'}`}></span>
+                                    <span className={`w-2 h-2 rounded-full shrink-0 ${isActive ? 'bg-[#FF0500] animate-pulse shadow-[0_0_5px_#FF0500]' : 'bg-[#FFB451]/30'}`}></span>
                                     <span>{toggle.label}</span>
                                   </button>
                                 );
@@ -4543,14 +4623,14 @@ export default function App() {
                     </div>
 
                     {/* Traveller Registration Section */}
-                    <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
-                      <div className="border-2 border-[#FF0500] p-5 rounded-xl bg-black/30 col-span-1 md:col-span-2 space-y-5">
+                    <div className="col-span-1 md:col-span-2 pt-3 border-t border-white/5 space-y-3">
+                      <div className="border-2 border-[#FF0500] p-3.5 rounded-xl bg-black/30 col-span-1 md:col-span-2 space-y-3">
                         <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                           <User className="w-3.5 h-3.5 text-[#FFB451]" />
                           {t("AGT Traveller Registration")}
                         </h3>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {/* Traveller Name */}
                           <div className="space-y-1">
                             <label className="text-[9px] uppercase tracking-wider text-[#FFB451]/60 font-mono font-bold">
@@ -4564,7 +4644,7 @@ export default function App() {
                                 setSettingsTravellerName(e.target.value.substring(0, 42));
                               }}
                               placeholder={t("Enter Traveller Name...")}
-                              className="w-full px-4 py-3 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
+                              className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
                             />
                           </div>
 
@@ -4585,12 +4665,12 @@ export default function App() {
                                   setVerifyValidationError(null);
                                 }}
                                 placeholder={t("Enter Password...")}
-                                className="w-full pl-4 pr-10 py-3 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
+                                className="w-full pl-3 pr-9 py-2 bg-[#0d0d0d] border border-[#FFB451]/20 rounded-xl text-xs font-mono text-white placeholder-[#FFB451]/30 focus:border-[#FF0500]/50 focus:ring-1 focus:ring-[#FF0500]/50 focus:outline-none transition-all"
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#FFB451]/60 hover:text-white transition-colors p-1 cursor-pointer"
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#FFB451]/60 hover:text-white transition-colors p-1 cursor-pointer"
                                 title={showPassword ? t("Hide Password") : t("Show Password")}
                               >
                                 {showPassword ? (
@@ -4604,14 +4684,14 @@ export default function App() {
                         </div>
 
                         {verifyValidationError && (
-                          <div className="text-[10px] text-red-500 font-mono flex items-center gap-1.5 bg-red-950/20 p-2.5 rounded-lg border border-red-500/10">
+                          <div className="text-[10px] text-red-500 font-mono flex items-center gap-1.5 bg-red-950/20 p-2 rounded-lg border border-red-500/10">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                             <span>{verifyValidationError}</span>
                           </div>
                         )}
 
                         {/* Control buttons */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
                           {/* Save & Verify */}
                           <button
                             type="button"
@@ -4685,7 +4765,7 @@ export default function App() {
                                 setVerifyLoading(false);
                               }
                             }}
-                            className="w-full py-3 bg-[#FF0500] hover:bg-[#FF0500]/85 border-2 border-[#FF0500] text-white disabled:opacity-50 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] flex items-center justify-center gap-2"
+                            className="w-full py-2 bg-[#FF0500] hover:bg-[#FF0500]/85 border-2 border-[#FF0500] text-white disabled:opacity-50 rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] flex items-center justify-center gap-2"
                           >
                             {verifyLoading ? (
                               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -4716,7 +4796,7 @@ export default function App() {
                                 setPopupMsg("Reset failed");
                               }
                             }}
-                            className="w-full py-3 bg-transparent border-2 border-[#FFB451]/20 hover:border-[#FFB451]/40 text-[#FFB451] rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center justify-center gap-2"
+                            className="w-full py-2 bg-transparent border-2 border-[#FFB451]/20 hover:border-[#FFB451]/40 text-[#FFB451] rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer flex items-center justify-center gap-2"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                             <span>{t("Reset")}</span>
@@ -4744,30 +4824,9 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Audio Section */}
-                    <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
-                      <div className="flex items-center justify-between border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
-                        <div className="space-y-1">
-                          <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
-                            <Volume2 className="w-3 h-3 text-[#FFB451]" />
-                            {t("AGT Anthem")}
-                          </h3>
-                        </div>
-                        <button 
-                          onClick={() => setAudioEnabled(!audioEnabled)}
-                          className={`flex items-center gap-3 px-6 py-3 rounded-xl border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 transition-all text-[10px] uppercase tracking-widest font-black cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] ${
-                            audioEnabled ? 'opacity-100' : 'opacity-60'
-                          }`}
-                        >
-                          {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-white" /> : <VolumeX className="w-3.5 h-3.5 text-white" />}
-                          {audioEnabled ? t('Active') : t('Muted')}
-                        </button>
-                      </div>
-                    </div>
-
                     {/* Region DB Source Section (last setting) */}
-                    <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
-                      <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30 col-span-1 md:col-span-2">
+                    <div className="col-span-1 md:col-span-2 pt-3 border-t border-white/5 space-y-3">
+                      <div className="space-y-3 border-2 border-[#FF0500] p-3.5 rounded-xl bg-black/30 col-span-1 md:col-span-2">
                         <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                           <Database className="w-3.5 h-3.5 text-[#FF0500]" />
                           {t("Region DB Source")}
